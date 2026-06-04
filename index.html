@@ -496,7 +496,6 @@
             <span class="logo-text">workFLOW</span>
             <span class="logo-plus">+</span>
         </div>
-        <div class="menu-item" id="menu-home" onclick="navigate('home-view', this)">Data Load Status</div>
         <div class="menu-item active" id="menu-spend" onclick="navigate('spend-view', this)">Weekly Spend Matrix</div>
         
         <div class="sidebar-truck">
@@ -552,27 +551,21 @@
             </div>
         </div>
 
-        <div id="home-view" class="view-section active">
-            <h1 class="home-title">Welcome to workFLOW +</h1>
-            <div class="upload-container" id="upload-box">
-                <h3>Loading Dashboard Data</h3>
-                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">Attempting to fetch <b>master_workFLOW.xlsx</b> from Firebase Storage...</p>
-                <div id="upload-status" style="font-size: 15px; font-weight: bold; color: #888;">Initializing...</div>
-                <div id="manual-upload-section" style="display: none; margin-top: 25px; padding-top: 20px; border-top: 1px dashed #ccc;">
-                    <p style="font-size: 13px; color: #888; margin-bottom: 10px;">Fallback: File not found. Upload manually below.</p>
-                    <label for="excelFileInput" class="upload-btn">Browse Files</label>
+        <div id="home-view" class="view-section" aria-hidden="true">
+            <div id="upload-box" style="display:none;">
+                <div id="upload-status" style="display:none;"></div>
+                <div id="manual-upload-section" style="display:none;">
                     <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" multiple />
                 </div>
             </div>
             <div id="home-dashboard" style="display:none;">
-                <div class="home-dashboard-header">
-                    <h2 style="margin:0;">Aggregate Performance Overview</h2>
-                </div>
-                <div class="home-kpi-container" id="home-kpi-container"></div>
+                <div class="home-dashboard-header" style="display:none;"></div>
+                <div class="home-kpi-container" id="home-kpi-container" style="display:none;"></div>
             </div>
         </div>
 
-        <div id="pm-view" class="view-section">
+        
+<div id="pm-view" class="view-section">
             <div class="view-title">
                 <span style="font-weight: 700;">PM Queue</span>
             </div>
@@ -615,7 +608,7 @@
             <div class="kpi-grid" id="nonosc-kpi-container"></div>
         </div>
 
-        <div id="spend-view" class="view-section">
+        <div id="spend-view" class="view-section active">
             <div class="view-title">Weekly Spend Matrix + Repair-Class AI / Spend Governor</div>
             <div class="sub-tabs-container">
                 <button class="sub-tab active" onclick="switchSpendTab('sub-weekly-spend', this)">Weekly Spend Matrix</button>
@@ -2297,7 +2290,7 @@
             'FINAL CHARGES SUBMITTED'
         ];
 
-        let lastActiveView = 'home-view';
+        let lastActiveView = 'spend-view';
 
         function switchSummaryTab(subId, btn) {
             document.querySelectorAll('#summary-view .sub-section').forEach(b => b.classList.remove('active'));
@@ -5230,7 +5223,7 @@
             if (!target || !target.viewId || !document.getElementById(target.viewId)) return;
 
             const viewToMenu = {
-                'home-view': 'menu-home',
+                'home-view': 'menu-spend',
                 'vended-view': 'menu-vended',
                 'pm-view': 'menu-pm',
                 'ers-view': 'menu-ers',
@@ -8457,6 +8450,10 @@
         }
 
         function navigate(viewId, menuElement = null, preserveCustomerFilter = false) {
+            if (viewId === 'home-view') {
+                viewId = 'spend-view';
+                menuElement = document.getElementById('menu-spend');
+            }
             if (!preserveCustomerFilter) {
                 currentCustomerFilter = 'ALL';
                 document.querySelectorAll('.customer-filter-select').forEach(sel => { sel.value = 'ALL'; });
