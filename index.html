@@ -551,21 +551,27 @@
             </div>
         </div>
 
-        <div id="home-view" class="view-section" aria-hidden="true">
-            <div id="upload-box" style="display:none;">
-                <div id="upload-status" style="display:none;"></div>
-                <div id="manual-upload-section" style="display:none;">
+        <div id="home-view" class="view-section">
+            <h1 class="home-title">Welcome to workFLOW +</h1>
+            <div class="upload-container" id="upload-box">
+                <h3>Loading Dashboard Data</h3>
+                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">Attempting to fetch <b>master_workFLOW.xlsx</b> from Firebase Storage...</p>
+                <div id="upload-status" style="font-size: 15px; font-weight: bold; color: #888;">Initializing...</div>
+                <div id="manual-upload-section" style="display: none; margin-top: 25px; padding-top: 20px; border-top: 1px dashed #ccc;">
+                    <p style="font-size: 13px; color: #888; margin-bottom: 10px;">Fallback: File not found. Upload manually below.</p>
+                    <label for="excelFileInput" class="upload-btn">Browse Files</label>
                     <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" multiple />
                 </div>
             </div>
             <div id="home-dashboard" style="display:none;">
-                <div class="home-dashboard-header" style="display:none;"></div>
-                <div class="home-kpi-container" id="home-kpi-container" style="display:none;"></div>
+                <div class="home-dashboard-header">
+                    <h2 style="margin:0;">Aggregate Performance Overview</h2>
+                </div>
+                <div class="home-kpi-container" id="home-kpi-container"></div>
             </div>
         </div>
 
-        
-<div id="pm-view" class="view-section">
+        <div id="pm-view" class="view-section">
             <div class="view-title">
                 <span style="font-weight: 700;">PM Queue</span>
             </div>
@@ -616,6 +622,7 @@
                 <button class="sub-tab" onclick="switchSpendTab('sub-weekly-history', this)">Weekly History</button>
                 <button class="sub-tab" onclick="switchSpendTab('sub-weekly-table-summary', this)">Weekly Table Summary</button>
                 <button class="sub-tab" onclick="switchSpendTab('sub-weekly-table-summary-dedicated', this)">Weekly Table Summary (Dedicated)</button>
+                <button class="sub-tab" onclick="switchSpendTab('sub-ai-recommendations-export', this)">AI Recommendations Export</button>
             </div>
             <div id="sub-weekly-spend" class="sub-section active">
                 <div id="spend-dashboard-widget"></div>
@@ -706,6 +713,22 @@
                         Summarizes dedicated STANDARD RO spend by week before and after AI transfer logic. In-Budget includes SCHEDULED, OSC PM, and DEF MAINT; every other repair class is Out-of-Budget.
                     </div>
                     <div id="weekly-spend-table-summary-dedicated-body"></div>
+                </div>
+            </div>
+            <div id="sub-ai-recommendations-export" class="sub-section">
+                <div class="drilldown-container">
+                    <div class="view-title" style="margin-bottom: 10px;">
+                        <span style="font-weight:700;">AI Recommendations by VRO</span>
+                        <div class="controls-group" style="display:flex; align-items:center;">
+                            <button class="btn-green" onclick="exportAiRecommendationsByVroToExcel()">&#11139; Export AI Recommendations</button>
+                        </div>
+                    </div>
+                    <div style="font-size:12px; color:#64748b; font-weight:700; margin-bottom:12px;">
+                        Exports Aging Repairs AI recommendations grouped by VRO with Original REPCLASS, Transfer REPCLASS, Why Transfer, and Spend Transfer.
+                    </div>
+                    <div id="ai-recommendations-export-preview" style="font-size:12px; color:#475569; font-weight:800; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px;">
+                        Use the export button to download the current AI recommendation list once Aging Repairs has loaded.
+                    </div>
                 </div>
             </div>
         </div>
@@ -2290,7 +2313,7 @@
             'FINAL CHARGES SUBMITTED'
         ];
 
-        let lastActiveView = 'spend-view';
+        let lastActiveView = 'home-view';
 
         function switchSummaryTab(subId, btn) {
             document.querySelectorAll('#summary-view .sub-section').forEach(b => b.classList.remove('active'));
@@ -3835,6 +3858,58 @@
             return out;
         }
 
+        function getAiRecommendationsByVroExportRows() {
+            const rows = Array.isArray(globalBillingRows) ? globalBillingRows : [];
+            const seen = new Set();
+            return rows
+                .map(issue => {
+                    const roNumber = String(issue.roNumber || '').trim();
+                    const safeRo = issue.safeRo || safeFirebaseKey(roNumber);
+                    const originalClass = String(issue.repClass || 'Not Available').trim() || 'Not Available';
+                    const transferClass = String(issue.recommendedClass || issue.suggestedService || 'Review').trim() || 'Review';
+                    const originalNorm = normalizeRepairClassForBudget(originalClass);
+                    const transferNorm = normalizeRepairClassForBudget(transferClass);
+                    if (!roNumber || seen.has(safeRo)) return null;
+                    if (!transferNorm || transferNorm === 'REVIEW' || transferNorm === 'NO TRANSFER' || transferNorm === 'NOT AVAILABLE') return null;
+                    if (originalNorm && transferNorm && originalNorm === transferNorm) return null;
+                    seen.add(safeRo);
+                    const spend = Number(issue.spend || 0);
+                    const originalAllocation = getWeeklyBudgetAllocationForClass(originalClass, spend);
+                    const transferAllocation = getWeeklyBudgetAllocationForClass(transferClass, spend);
+                    return {
+                        'AFS RO #': roNumber,
+                        'Unit No': issue.unitNo || '',
+                        'Owner / Coordinator': issue.coordinator || '',
+                        'Queue Source': issue.queueSource || '',
+                        'Current Status': issue.currentStatus || '',
+                        'Original REPCLASS': originalClass,
+                        'Transfer REPCLASS': transferClass,
+                        'Why Transfer': Array.isArray(issue.reasons) ? issue.reasons.join(' | ') : (issue.reasons || ''),
+                        'Spend Transfer': spend,
+                        'Original Budget Bucket': originalAllocation.budgetBucket || '',
+                        'Transfer Budget Bucket': transferAllocation.budgetBucket || '',
+                        'Review Status': issue.reviewStatus || 'Open',
+                        'Review Reason / Memo': issue.reviewReason || ''
+                    };
+                })
+                .filter(Boolean)
+                .sort((a, b) => Number(b['Spend Transfer'] || 0) - Number(a['Spend Transfer'] || 0));
+        }
+
+        function exportAiRecommendationsByVroToExcel() {
+            const exportRows = getAiRecommendationsByVroExportRows();
+            if (!exportRows.length) {
+                alert('No AI repair-class transfer recommendations are available to export. Confirm Aging Repairs has loaded and recommendations exist.');
+                return;
+            }
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(exportRows);
+            autoFitColumns(ws, exportRows);
+            styleExcelHeaders(ws);
+            XLSX.utils.book_append_sheet(wb, ws, 'AI Recommendations by VRO');
+            XLSX.writeFile(wb, `ai_recommendations_by_vro_${getLocalDateKey(new Date())}.xlsx`);
+        }
+
         function exportWeeklySpendTableSummaryToExcel() {
             const rows = globalWeeklySpendHistoryRows || [];
             if (rows.length === 0) {
@@ -5223,7 +5298,7 @@
             if (!target || !target.viewId || !document.getElementById(target.viewId)) return;
 
             const viewToMenu = {
-                'home-view': 'menu-spend',
+                'home-view': 'menu-home',
                 'vended-view': 'menu-vended',
                 'pm-view': 'menu-pm',
                 'ers-view': 'menu-ers',
@@ -8450,10 +8525,6 @@
         }
 
         function navigate(viewId, menuElement = null, preserveCustomerFilter = false) {
-            if (viewId === 'home-view') {
-                viewId = 'spend-view';
-                menuElement = document.getElementById('menu-spend');
-            }
             if (!preserveCustomerFilter) {
                 currentCustomerFilter = 'ALL';
                 document.querySelectorAll('.customer-filter-select').forEach(sel => { sel.value = 'ALL'; });
