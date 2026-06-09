@@ -571,49 +571,6 @@
             </div>
         </div>
 
-        <div id="pm-view" class="view-section">
-            <div class="view-title">
-                <span style="font-weight: 700;">PM Queue</span>
-            </div>
-            <div class="kpi-grid" id="pm-kpi-container"></div>
-        </div>
-
-        <div id="vended-view" class="view-section">
-            <div class="view-title">
-                <span style="font-weight: 700;">Vended Repair Queue</span>
-            </div>
-            <div class="filter-bar">
-                <button class="filter-btn active" data-filter="ALL" onclick="setFilter('ALL')">All Units</button>
-                <button class="filter-btn" data-filter="OOS" onclick="setFilter('OOS')">Only OOS</button>
-                <button class="filter-btn" data-filter="PRIORITY" onclick="setFilter('PRIORITY')">Priority</button>
-            </div>
-            <div class="kpi-grid" id="vended-kpi-container"></div>
-        </div>
-
-        <div id="ers-view" class="view-section">
-            <div class="view-title">
-                <span style="font-weight: 700;">ERS Queue</span>
-            </div>
-            <div class="filter-bar">
-                <button class="filter-btn active" data-filter="ALL" onclick="setFilter('ALL')">All Units</button>
-                <button class="filter-btn" data-filter="OOS" onclick="setFilter('OOS')">Only OOS</button>
-                <button class="filter-btn" data-filter="PRIORITY" onclick="setFilter('PRIORITY')">Priority</button>
-            </div>
-            <div class="kpi-grid" id="ers-kpi-container"></div>
-        </div>
-
-        <div id="nonosc-view" class="view-section">
-            <div class="view-title">
-                <span style="font-weight: 700;">Non-OSC Queue</span>
-            </div>
-            <div class="filter-bar">
-                <button class="filter-btn active" data-filter="ALL" onclick="setFilter('ALL')">All Units</button>
-                <button class="filter-btn" data-filter="OOS" onclick="setFilter('OOS')">Only OOS</button>
-                <button class="filter-btn" data-filter="PRIORITY" onclick="setFilter('PRIORITY')">Priority</button>
-            </div>
-            <div class="kpi-grid" id="nonosc-kpi-container"></div>
-        </div>
-
         <div id="spend-view" class="view-section active">
             <div class="view-title">Weekly Spend Matrix + Repair-Class AI / Spend Governor</div>
             <div class="sub-tabs-container">
@@ -724,164 +681,14 @@
                         </div>
                     </div>
                     <div style="font-size:12px; color:#64748b; font-weight:700; margin-bottom:12px;">
-                        Exports all Aging Repairs VROs with Original REPCLASS, AI Transfer REPCLASS, Why Transfer / Why No Transfer, and Spend Transfer.
+                        Exports every VRO from the VRO Export tab 1:1. AI recommendations are joined when available; VROs without an AI recommendation are still included.
                     </div>
                     <div id="ai-recommendations-export-preview" style="font-size:12px; color:#475569; font-weight:800; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px;">
-                        Use the export button to download the current AI recommendation list once Aging Repairs has loaded.
+                        Use the export button to download the VRO Export reconciliation list. Every VRO Export Order is included, even when Aging Repairs has no AI recommendation for it.
                     </div>
                 </div>
             </div>
         </div>
-
-        <div id="person-view" class="view-section">
-            <div class="view-title">
-                <div style="display:flex; align-items:center; gap: 20px;">
-                    <span id="person-name-title" style="font-weight: 700;">Owner Details</span>
-                </div>
-                <div class="controls-group" style="display: flex; align-items: center;">
-                    <button class="btn-green" onclick="exportDrilldownToExcel()">&#11139; Export to XLSX</button>
-                    <button onclick="toggleAllDetails(true)">Expand All</button>
-                    <button onclick="toggleAllDetails(false)">Collapse All</button>
-                    <button id="dynamic-back-btn">&larr; Back</button>
-                </div>
-            </div>
-            <div class="filter-bar" id="standard-drilldown-filters">
-                <button class="filter-btn active" data-filter="ALL" onclick="setFilter('ALL')">All Units</button>
-                <button class="filter-btn" data-filter="OOS" onclick="setFilter('OOS')">Only OOS</button>
-                <button class="filter-btn" data-filter="PRIORITY" onclick="setFilter('PRIORITY')">Priority</button>
-            </div>
-            <div class="drilldown-container" id="drilldown-body"></div>
-        </div>
-
-        <div id="summary-view" class="view-section">
-            <div class="view-title">
-                <span style="font-weight: 700;">Consolidation Summary</span>
-                <div class="controls-group" style="display: flex; align-items: center;" id="summary-tree-controls">
-                    <button class="btn-green" onclick="exportSummaryToExcel()">&#11139; Export to XLSX</button>
-                    <button id="btn-expand" onclick="toggleAllSummary(true)">Expand All</button>
-                    <button id="btn-collapse" onclick="toggleAllSummary(false)">Collapse All</button>
-                </div>
-            </div>
-            
-            <div class="filter-bar" style="align-items: center;">
-                <select id="sum-region" class="filter-select" style="margin-right: 10px;" onchange="updateSummaryFilters()"><option value="ALL">All Regions</option></select>
-                <select id="sum-subregion" class="filter-select" style="margin-right: 10px;" onchange="updateSummaryFilters()"><option value="ALL">All Subregions</option></select>
-                <select id="sum-branch" class="filter-select" style="margin-right: 15px;" onchange="updateSummaryFilters()"><option value="ALL">All Branches</option></select>
-                
-                <label style="margin-right: 15px; font-weight: bold; font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer;">
-                    <input type="checkbox" id="report-notes-only" style="cursor: pointer;" onchange="updateSummaryFilters()"> Has Notes Only
-                </label>
-            </div>
-
-            <div class="sub-tabs-container">
-                <button class="sub-tab active" onclick="switchSummaryTab('sub-summary', this)">VDR Consolidation Summary</button>
-                <button class="sub-tab" onclick="switchSummaryTab('sub-amerit-oos', this)">Amerit OOS Trucks</button>
-            </div>
-
-            <div id="sub-summary" class="sub-section active">
-                <div class="drilldown-container table-wrapper">
-                    <table id="summaryTable">
-                        <colgroup>
-                            <col style="width: 34%;">
-                            <col style="width: 11%;">
-                            <col style="width: 11%;">
-                            <col style="width: 10%;">
-                            <col style="width: 11%;">
-                            <col style="width: 11%;">
-                            <col style="width: 12%;">
-                        </colgroup>
-                        <thead>
-                            <tr>
-                                <th>Region / Subregion / Branch</th>
-                                <th style="text-align:right;">Max Routes</th>
-                                <th style="text-align:right;">Total Units</th>
-                                <th style="text-align:right;">OOS</th>
-                                <th style="text-align:right;">Useful %</th>
-                                <th style="text-align:right;">DoD OOS</th>
-                                <th style="text-align:right;">DoD Change</th>
-                            </tr>
-                        </thead>
-                        <tbody id="summary-table-body"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="sub-amerit-oos" class="sub-section">
-                <div class="drilldown-container table-wrapper">
-                    <table id="ameritOosTable">
-                        <colgroup>
-                            <col style="width: 12%;">
-                            <col style="width: 15%;">
-                            <col style="width: 23%;">
-                            <col style="width: 10%;">
-                            <col style="width: 10%;">
-                            <col style="width: 30%;">
-                        </colgroup>
-                        <thead>
-                            <tr>
-                                <th onclick="sortAmeritOos(0, 'string')">Region ↕</th>
-                                <th onclick="sortAmeritOos(1, 'string')">Sub Region ↕</th>
-                                <th onclick="sortAmeritOos(2, 'string')">Branch ↕</th>
-                                <th onclick="sortAmeritOos(3, 'string')">Truck # ↕</th>
-                                <th onclick="sortAmeritOos(4, 'date')">Max ECD ↕</th>
-                                <th>Notes</th>
-                            </tr>
-                        </thead>
-                        <tbody id="amerit-oos-table-body"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-
-
-        <div id="search-view" class="view-section">
-            <div class="view-title">
-                <div style="display:flex; align-items:center; gap: 20px;">
-                    <span style="font-weight: 700;">Search Results: <span id="search-term-display"></span></span>
-                </div>
-                <div class="controls-group" style="display: flex; align-items: center;">
-                    <button class="btn-green" onclick="exportSearchToExcel()">&#11139; Export to XLSX</button>
-                    <button onclick="navigate(lastActiveView, null, true)">&larr; Back</button>
-                </div>
-            </div>
-            <div class="drilldown-container table-wrapper">
-                <table>
-                    <colgroup>
-                        <col style="width: 20%;"> <col style="width: 12%;"> <col style="width: 12%;">
-                        <col style="width: 10%;">  <col style="width: 12%;"> <col style="width: 12%;">
-                        <col style="width: 22%;">
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th>AFS RO # & Dispatch</th><th>Unit No</th><th>Priority Status</th>
-                            <th>OOS Status</th><th>Opened Date</th><th>Owner</th>
-                            <th>Status & ECD</th>
-                        </tr>
-                    </thead>
-                    <tbody id="search-table-body"></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <div id="note-modal" class="modal-overlay">
-        <div class="modal-box">
-            <div class="modal-header">
-                <span id="note-modal-title">Notes</span>
-                <button class="modal-close" onclick="closeNoteModal()">&times;</button>
-            </div>
-            <div class="activity-helper-text">Daily log is tracked in Firebase. Prior-day entries are shown as locked history; add a new update for today instead of overwriting history.</div>
-            <div id="note-activity-log" class="activity-log-container">
-                <div class="activity-log-empty">No activity logged yet.</div>
-            </div>
-            <textarea id="note-textarea" class="modal-textarea" placeholder="Add today's update. Example: Vendor confirmed onsite ETA 2 PM; parts pending."></textarea>
-            <div class="modal-actions">
-                <button class="btn-cancel" onclick="closeNoteModal()">Cancel</button>
-                <button class="btn-save" onclick="saveNote()">Save Update</button>
-            </div>
-        </div>
-    </div>
 
     <div id="repair-class-review-modal" class="modal-overlay repair-class-review-modal">
         <div class="modal-box repair-class-review-box">
@@ -1185,17 +992,19 @@
             const dashboard = document.getElementById('home-dashboard');
             const manualUpload = document.getElementById('manual-upload-section');
 
-            uploadBox.style.display = 'block';
-            dashboard.style.display = 'none';
-            manualUpload.style.display = 'none';
+            if (uploadBox) uploadBox.style.display = 'block';
+            if (dashboard) dashboard.style.display = 'none';
+            if (manualUpload) manualUpload.style.display = 'none';
 
-            statusEl.innerText = 'Fetching workbook from Firebase Storage...';
-            statusEl.style.color = '#888';
+            if (statusEl) {
+                statusEl.innerText = 'Fetching workbook from Firebase Storage...';
+                statusEl.style.color = '#888';
+            }
 
             try {
                 const data = await fetchWorkbookBuffer();
 
-                statusEl.innerText = 'File found. Processing data...';
+                if (statusEl) statusEl.innerText = 'File found. Processing data...';
 
                 const workbook = XLSX.read(data, { type: 'array' });
                 
@@ -1376,6 +1185,7 @@
         let globalSpendChangeLogRows = [];
         let globalBillingRows = [];
         let globalAiRecommendationRows = [];
+        let globalVroExportRows = [];
         let globalBillingIssueMap = {};
         let globalBillingReviewState = {};
         let globalPendingRepairClassReview = null;
@@ -3859,53 +3669,154 @@
             return out;
         }
 
-        function getAiRecommendationsByVroExportRows() {
-            const rows = Array.isArray(globalAiRecommendationRows) && globalAiRecommendationRows.length
-                ? globalAiRecommendationRows
-                : (Array.isArray(globalBillingRows) ? globalBillingRows : []);
-            const seen = new Set();
-            return rows
-                .map(issue => {
-                    const roNumber = String(issue.roNumber || '').trim();
-                    const safeRo = issue.safeRo || safeFirebaseKey(roNumber);
-                    const originalClass = String(issue.repClass || issue.originalClass || 'Not Available').trim() || 'Not Available';
-                    const transferClass = String(issue.recommendedClass || issue.transferClass || issue.suggestedService || originalClass || 'No Transfer').trim() || 'No Transfer';
-                    if (!roNumber || seen.has(safeRo)) return null;
-                    seen.add(safeRo);
-                    const spend = Number(issue.spend || 0);
-                    const originalAllocation = getWeeklyBudgetAllocationForClass(originalClass, spend);
-                    const transferAllocation = getWeeklyBudgetAllocationForClass(transferClass, spend);
-                    const whyTransfer = Array.isArray(issue.reasons) ? issue.reasons.join(' | ') : (issue.reason || issue.reasons || 'No transfer recommended by current AI logic.');
-                    return {
-                        'AFS RO #': roNumber,
-                        'Unit No': issue.unitNo || '',
-                        'Owner / Coordinator': issue.coordinator || '',
-                        'Queue Source': issue.queueSource || '',
-                        'Current Status': issue.currentStatus || '',
-                        'AI Decision': issue.aiDecision || ((normalizeRepairClassForBudget(originalClass) !== normalizeRepairClassForBudget(transferClass)) ? 'TRANSFER RECOMMENDED' : 'NO TRANSFER'),
-                        'Original REPCLASS': originalClass,
-                        'Transfer REPCLASS': transferClass,
-                        'Why Transfer / Why No Transfer': whyTransfer,
-                        'Spend Transfer': spend,
-                        'Original Budget Bucket': originalAllocation.budgetBucket || '',
-                        'Transfer Budget Bucket': transferAllocation.budgetBucket || '',
-                        'Review Status': issue.reviewStatus || 'Open',
-                        'Review Reason / Memo': issue.reviewReason || ''
-                    };
-                })
-                .filter(Boolean)
-                .sort((a, b) => {
-                    const aTransfer = String(a['AI Decision'] || '').includes('TRANSFER') ? 0 : 1;
-                    const bTransfer = String(b['AI Decision'] || '').includes('TRANSFER') ? 0 : 1;
-                    if (aTransfer !== bTransfer) return aTransfer - bTransfer;
-                    return Number(b['Spend Transfer'] || 0) - Number(a['Spend Transfer'] || 0);
+        function getNormalizedRoNumber(value) {
+            return String(value || '').toUpperCase().trim();
+        }
+
+        function buildVroExportRowsForAiReconciliation(vroRaw) {
+            const rows = [];
+            (vroRaw || []).forEach((row, idx) => {
+                if (!row || typeof row !== 'object') return;
+                const roNumber = getNormalizedRoNumber(getCol(row, ['Order', 'AFS RO #', 'RO Number', 'RONum', 'RO Num']));
+                if (!roNumber || !/\d/.test(roNumber)) return;
+                rows.push({
+                    sourceRowNumber: idx + 1,
+                    roNumber,
+                    safeRo: safeFirebaseKey(roNumber),
+                    unitNo: getCol(row, ['Unit No', 'UNITNUMBER', 'Unit Number', 'Vehicle', 'Vehicle Unit No']),
+                    owner: getCol(row, ['Owner', 'Created By', 'Coordinator', 'Contact', 'Email']),
+                    currentStatus: getCol(row, ['Status', 'PortalTab', 'Current Status']),
+                    originalClass: getCol(row, ['Type', 'Original REPCLASS', 'RepClass', 'Repair Class', 'RepairClass']),
+                    raw: row
                 });
+            });
+            return rows;
+        }
+
+        function getProcessedRoBySafeRoMap() {
+            const map = {};
+            (processedData || []).forEach(ro => {
+                if (!ro || !ro.roNum) return;
+                const safeRo = safeFirebaseKey(ro.roNum);
+                if (safeRo && !map[safeRo]) map[safeRo] = ro;
+            });
+            return map;
+        }
+
+        function getAiRecommendationBySafeRoMap() {
+            const map = {};
+            const sources = [];
+            if (Array.isArray(globalAiRecommendationRows)) sources.push(...globalAiRecommendationRows);
+            if (Array.isArray(globalBillingRows)) sources.push(...globalBillingRows);
+            sources.forEach(issue => {
+                if (!issue) return;
+                const roNumber = getNormalizedRoNumber(issue.roNumber || issue['AFS RO #'] || issue.order || '');
+                if (!roNumber) return;
+                const safeRo = issue.safeRo || safeFirebaseKey(roNumber);
+                if (!safeRo) return;
+                const existing = map[safeRo];
+                const incomingTransfer = String(issue.aiDecision || '').toUpperCase().includes('TRANSFER') || !!issue.recommendedClass;
+                const existingTransfer = existing && (String(existing.aiDecision || '').toUpperCase().includes('TRANSFER') || !!existing.recommendedClass);
+                if (!existing || (incomingTransfer && !existingTransfer)) map[safeRo] = issue;
+            });
+            return map;
+        }
+
+        function getReasonTextForAiExport(issue, fallback) {
+            if (!issue) return fallback || '';
+            if (Array.isArray(issue.reasons) && issue.reasons.length) return issue.reasons.join(' | ');
+            return issue.reason || issue.reasons || issue.reviewReason || fallback || '';
+        }
+
+        function buildAiRecommendationExportRow(base, issue, processedRoMap) {
+            const roNumber = getNormalizedRoNumber((base && base.roNumber) || (issue && issue.roNumber) || '');
+            const safeRo = (base && base.safeRo) || (issue && issue.safeRo) || safeFirebaseKey(roNumber);
+            const roContext = processedRoMap && processedRoMap[safeRo] ? processedRoMap[safeRo] : null;
+            const fin = window.globalOrderFin && window.globalOrderFin[roNumber] ? window.globalOrderFin[roNumber] : {};
+            const originalClass = String(
+                (base && base.originalClass) ||
+                (issue && (issue.originalClass || issue.repClass)) ||
+                (roContext && roContext.repClass) ||
+                fin.repClass ||
+                'Not Available'
+            ).trim() || 'Not Available';
+            const hasIssue = !!issue;
+            const transferClass = String(
+                (issue && (issue.recommendedClass || issue.transferClass || issue.suggestedService)) ||
+                originalClass
+            ).trim() || originalClass;
+            const spend = Number((issue && issue.spend) || fin.total || 0);
+            const originalAllocation = getWeeklyBudgetAllocationForClass(originalClass, spend);
+            const transferAllocation = getWeeklyBudgetAllocationForClass(transferClass, spend);
+            const hasTransfer = normalizeRepairClassForBudget(originalClass) !== normalizeRepairClassForBudget(transferClass);
+            const review = globalBillingReviewState && globalBillingReviewState[safeRo] ? globalBillingReviewState[safeRo] : {};
+            const why = hasIssue
+                ? getReasonTextForAiExport(issue, hasTransfer ? 'Transfer recommended by current AI logic.' : 'No transfer recommended by current AI logic; current REPCLASS is supported or evidence is low-confidence.')
+                : 'No Aging Repairs AI recommendation record found for this VRO; included from VRO Export for 1:1 reconciliation.';
+            return {
+                'VRO Export Row #': base && base.sourceRowNumber ? base.sourceRowNumber : '',
+                'AFS RO #': roNumber,
+                'Unit No': (base && base.unitNo) || (issue && issue.unitNo) || (roContext && roContext.unitNo) || fin.unitNo || '',
+                'Owner / Coordinator': (base && base.owner) || (issue && issue.coordinator) || (roContext && roContext.owner) || fin.contact || '',
+                'Queue Source': (issue && issue.queueSource) || (roContext && roContext.sourceQueue) || '',
+                'Current Status': (base && base.currentStatus) || (issue && issue.currentStatus) || (roContext && roContext.status) || fin.status || '',
+                'AI Decision': hasIssue ? (issue.aiDecision || (hasTransfer ? 'TRANSFER RECOMMENDED' : 'NO TRANSFER')) : 'NO AI RECORD - INCLUDED FROM VRO EXPORT',
+                'Original REPCLASS': originalClass,
+                'Transfer REPCLASS': transferClass,
+                'Why Transfer / Why No Transfer': why,
+                'Spend Transfer': spend,
+                'Original Budget Bucket': originalAllocation.budgetBucket || '',
+                'Transfer Budget Bucket': transferAllocation.budgetBucket || '',
+                'AI Source Match': hasIssue ? 'VRO Export + Aging Repairs AI' : 'VRO Export Only',
+                'Review Status': review.status || (issue && issue.reviewStatus) || 'Open',
+                'Review Reason / Memo': review.reason || (issue && issue.reviewReason) || ''
+            };
+        }
+
+        function getAiRecommendationsByVroExportRows() {
+            const processedRoMap = getProcessedRoBySafeRoMap();
+            const aiMap = getAiRecommendationBySafeRoMap();
+            const baseRows = Array.isArray(globalVroExportRows) && globalVroExportRows.length
+                ? globalVroExportRows
+                : (processedData || []).filter(ro => ro && ro.roNum && !String(ro.roNum).startsWith('NO RO') && !String(ro.roNum).startsWith('SEE_OTHER')).map((ro, idx) => ({
+                    sourceRowNumber: idx + 1,
+                    roNumber: getNormalizedRoNumber(ro.roNum),
+                    safeRo: safeFirebaseKey(ro.roNum),
+                    unitNo: ro.unitNo || '',
+                    owner: ro.owner || '',
+                    currentStatus: ro.status || '',
+                    originalClass: ro.repClass || ''
+                }));
+
+            const exportRows = baseRows
+                .map(base => buildAiRecommendationExportRow(base, aiMap[base.safeRo], processedRoMap))
+                .filter(row => row && row['AFS RO #']);
+
+            if (exportRows.length === 0) {
+                const seen = new Set();
+                Object.keys(aiMap).forEach(safeRo => {
+                    const issue = aiMap[safeRo];
+                    if (!issue || !issue.roNumber || seen.has(safeRo)) return;
+                    seen.add(safeRo);
+                    exportRows.push(buildAiRecommendationExportRow({
+                        sourceRowNumber: '',
+                        roNumber: issue.roNumber,
+                        safeRo: safeRo,
+                        unitNo: issue.unitNo || '',
+                        owner: issue.coordinator || '',
+                        currentStatus: issue.currentStatus || '',
+                        originalClass: issue.originalClass || issue.repClass || ''
+                    }, issue, processedRoMap));
+                });
+            }
+
+            return exportRows.sort((a, b) => Number(a['VRO Export Row #'] || 0) - Number(b['VRO Export Row #'] || 0));
         }
 
         function exportAiRecommendationsByVroToExcel() {
             const exportRows = getAiRecommendationsByVroExportRows();
             if (!exportRows.length) {
-                alert('No Aging Repairs VROs are available to export. Confirm Aging Repairs has loaded.');
+                alert('No VRO Export rows are available to export. Confirm master_workFLOW.xlsx has loaded.');
                 return;
             }
             const wb = XLSX.utils.book_new();
@@ -4967,6 +4878,7 @@
             let rSel = document.getElementById('sum-region');
             let sSel = document.getElementById('sum-subregion');
             let bSel = document.getElementById('sum-branch');
+            if (!rSel || !sSel || !bSel) return;
             
             let rVal = rSel.value;
             let sVal = sSel.value;
@@ -6005,7 +5917,8 @@
                 const driverAbuseHits = billingContainsAny(combinedText, driverAbuseKeywords);
                 const primaryRepUpper = String(primaryRepClass || '').toUpperCase();
                 const hasDriverRiskCameraOverride = g.specialProjectCameraSystem || g.componentCodes.some(code => isDriverRiskManagementCameraSystemEvidence(code, combinedText, combinedText));
-                if (hasDriverRiskCameraOverride && primaryRepUpper.includes('SPECIAL')) return;
+                // Do not return here. Even when the current class is already SPECIAL PROJECT,
+                // the AI export must still include the VRO as a no-transfer row for 1:1 reconciliation.
                 const hasBrakeDiagnosticsScheduled = g.brakeDiagnosticsScheduled || g.componentCodes.some(code => isBrakeDiagnosticsScheduledEvidence(code, combinedText, combinedText));
                 const hvacDiagnostics = classifyHvacDiagnosticsRepair(g, combinedText);
                 const aggressiveNotesReview = classifyAggressiveNotesRepairClass(g, combinedText, spend);
@@ -6604,6 +6517,7 @@
 
         function processExcelData(vroRaw, roDetailRaw, resourceRawAOA, oosRawAOA, usefulRawAOA, dodRawAOA) {
             const today = new Date(); today.setHours(0, 0, 0, 0);
+            globalVroExportRows = buildVroExportRowsForAiReconciliation(vroRaw || []);
             
             branchUsefulMap = {};
             branchMetricsMap = {};
