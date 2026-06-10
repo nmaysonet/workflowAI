@@ -724,7 +724,7 @@
                         </div>
                     </div>
                     <div style="font-size:12px; color:#64748b; font-weight:700; margin-bottom:12px;">
-                        Exports Aging Repairs AI recommendations grouped by VRO with Original REPCLASS, Transfer REPCLASS, Why Transfer, and Spend Transfer.
+                        Exports all Aging Repairs VROs with Original REPCLASS, AI Transfer REPCLASS, Why Transfer / Why No Transfer, and Spend Transfer.
                     </div>
                     <div id="ai-recommendations-export-preview" style="font-size:12px; color:#475569; font-weight:800; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px;">
                         Use the export button to download the current AI recommendation list once Aging Repairs has loaded.
@@ -1375,6 +1375,7 @@
         let globalWorkflowActivityState = {};
         let globalSpendChangeLogRows = [];
         let globalBillingRows = [];
+        let globalAiRecommendationRows = [];
         let globalBillingIssueMap = {};
         let globalBillingReviewState = {};
         let globalPendingRepairClassReview = null;
@@ -3859,32 +3860,32 @@
         }
 
         function getAiRecommendationsByVroExportRows() {
-            const rows = Array.isArray(globalBillingRows) ? globalBillingRows : [];
+            const rows = Array.isArray(globalAiRecommendationRows) && globalAiRecommendationRows.length
+                ? globalAiRecommendationRows
+                : (Array.isArray(globalBillingRows) ? globalBillingRows : []);
             const seen = new Set();
             return rows
                 .map(issue => {
                     const roNumber = String(issue.roNumber || '').trim();
                     const safeRo = issue.safeRo || safeFirebaseKey(roNumber);
-                    const originalClass = String(issue.repClass || 'Not Available').trim() || 'Not Available';
-                    const transferClass = String(issue.recommendedClass || issue.suggestedService || 'Review').trim() || 'Review';
-                    const originalNorm = normalizeRepairClassForBudget(originalClass);
-                    const transferNorm = normalizeRepairClassForBudget(transferClass);
+                    const originalClass = String(issue.repClass || issue.originalClass || 'Not Available').trim() || 'Not Available';
+                    const transferClass = String(issue.recommendedClass || issue.transferClass || issue.suggestedService || originalClass || 'No Transfer').trim() || 'No Transfer';
                     if (!roNumber || seen.has(safeRo)) return null;
-                    if (!transferNorm || transferNorm === 'REVIEW' || transferNorm === 'NO TRANSFER' || transferNorm === 'NOT AVAILABLE') return null;
-                    if (originalNorm && transferNorm && originalNorm === transferNorm) return null;
                     seen.add(safeRo);
                     const spend = Number(issue.spend || 0);
                     const originalAllocation = getWeeklyBudgetAllocationForClass(originalClass, spend);
                     const transferAllocation = getWeeklyBudgetAllocationForClass(transferClass, spend);
+                    const whyTransfer = Array.isArray(issue.reasons) ? issue.reasons.join(' | ') : (issue.reason || issue.reasons || 'No transfer recommended by current AI logic.');
                     return {
                         'AFS RO #': roNumber,
                         'Unit No': issue.unitNo || '',
                         'Owner / Coordinator': issue.coordinator || '',
                         'Queue Source': issue.queueSource || '',
                         'Current Status': issue.currentStatus || '',
+                        'AI Decision': issue.aiDecision || ((normalizeRepairClassForBudget(originalClass) !== normalizeRepairClassForBudget(transferClass)) ? 'TRANSFER RECOMMENDED' : 'NO TRANSFER'),
                         'Original REPCLASS': originalClass,
                         'Transfer REPCLASS': transferClass,
-                        'Why Transfer': Array.isArray(issue.reasons) ? issue.reasons.join(' | ') : (issue.reasons || ''),
+                        'Why Transfer / Why No Transfer': whyTransfer,
                         'Spend Transfer': spend,
                         'Original Budget Bucket': originalAllocation.budgetBucket || '',
                         'Transfer Budget Bucket': transferAllocation.budgetBucket || '',
@@ -3893,13 +3894,18 @@
                     };
                 })
                 .filter(Boolean)
-                .sort((a, b) => Number(b['Spend Transfer'] || 0) - Number(a['Spend Transfer'] || 0));
+                .sort((a, b) => {
+                    const aTransfer = String(a['AI Decision'] || '').includes('TRANSFER') ? 0 : 1;
+                    const bTransfer = String(b['AI Decision'] || '').includes('TRANSFER') ? 0 : 1;
+                    if (aTransfer !== bTransfer) return aTransfer - bTransfer;
+                    return Number(b['Spend Transfer'] || 0) - Number(a['Spend Transfer'] || 0);
+                });
         }
 
         function exportAiRecommendationsByVroToExcel() {
             const exportRows = getAiRecommendationsByVroExportRows();
             if (!exportRows.length) {
-                alert('No AI repair-class transfer recommendations are available to export. Confirm Aging Repairs has loaded and recommendations exist.');
+                alert('No Aging Repairs VROs are available to export. Confirm Aging Repairs has loaded.');
                 return;
             }
             const wb = XLSX.utils.book_new();
@@ -5833,6 +5839,7 @@
 
         function processAgingRepairsData(agingRawAOA) {
             globalBillingRows = [];
+            globalAiRecommendationRows = [];
             globalBillingIssueMap = {};
             if (!agingRawAOA || !agingRawAOA.length) {
                 renderBillingQueue();
@@ -5925,6 +5932,32 @@
             const excludableKeywords = ['accident', 'collision', 'driver abuse', 'misuse', 'vandalism', 'damage', 'deferred maintenance', 'deferred', 'engine replacement', 'transmission', 'aftertreatment', 'dpf', 'emissions', 'regen', 'def in fuel', 'fuel contamination', 'road hazard', 'sidewall', 'lockout', 'lost key', 'customer direct', 'cust direct', 'customer used', 'branch sent', 'not dispatched by amerit', 'samsara', 'camera install', 'retrofit', 'upfit', 'merchant'];
             const driverAbuseKeywords = ['driver abuse', 'driver caused', 'operator error', 'road hazard', 'sidewall', 'lockout', 'lost key', 'misfuel', 'def in fuel', 'fuel contamination', 'out of fuel', 'ignored warning', 'ignored regen', 'parked regen', 'regen', 'derate', 'derated', 'de-rate', 'de rate'];
 
+            function addAiRecommendationExportRecord(details) {
+                const roNumber = String(details.roNumber || '').trim();
+                if (!roNumber) return;
+                const safeRo = details.safeRo || safeFirebaseKey(roNumber);
+                const originalClass = String(details.originalClass || details.repClass || 'Not Available').trim() || 'Not Available';
+                const recommendedClass = String(details.recommendedClass || details.transferClass || originalClass || 'No Transfer').trim() || originalClass || 'No Transfer';
+                const originalNorm = normalizeRepairClassForBudget(originalClass);
+                const transferNorm = normalizeRepairClassForBudget(recommendedClass);
+                const hasTransfer = !!(originalNorm && transferNorm && originalNorm !== transferNorm);
+                globalAiRecommendationRows.push({
+                    safeRo,
+                    roNumber,
+                    unitNo: details.unitNo || '',
+                    coordinator: details.coordinator || '',
+                    queueSource: details.queueSource || '',
+                    currentStatus: details.currentStatus || '',
+                    repClass: originalClass,
+                    recommendedClass,
+                    spend: Number(details.spend || 0),
+                    reasons: details.reasons || [hasTransfer ? 'AI transfer recommended from Aging Repairs evidence.' : 'No transfer recommended by current AI logic; current REPCLASS is supported or evidence is low-confidence.'],
+                    aiDecision: details.aiDecision || (hasTransfer ? 'TRANSFER RECOMMENDED' : 'NO TRANSFER'),
+                    reviewStatus: details.reviewStatus || 'Open',
+                    reviewReason: details.reviewReason || ''
+                });
+            }
+
             Object.values(groups).forEach(g => {
                 const roContext = roLookup[g.roNumber] || null;
                 const fin = window.globalOrderFin && window.globalOrderFin[g.roNumber] ? window.globalOrderFin[g.roNumber] : {};
@@ -5942,7 +5975,26 @@
 
                 // Hard precedence rule: if Aging Repairs already shows GARDA ERSA anywhere on the RO,
                 // do not create a repair-class exception or recommend any other class.
-                if (repClassList.some(isGardaErsaRepairClass)) return;
+                if (repClassList.some(isGardaErsaRepairClass)) {
+                    const safeRo = safeFirebaseKey(g.roNumber);
+                    const review = globalBillingReviewState[safeRo] || { status: 'Open' };
+                    addAiRecommendationExportRecord({
+                        safeRo,
+                        roNumber: g.roNumber,
+                        unitNo: g.unitNo || (roContext && roContext.unitNo) || fin.unitNo || '',
+                        coordinator,
+                        queueSource,
+                        currentStatus,
+                        originalClass: repClassList.join(', ') || primaryRepClass || 'GARDA ERSA',
+                        recommendedClass: repClassList.join(', ') || primaryRepClass || 'GARDA ERSA',
+                        spend,
+                        aiDecision: 'NO TRANSFER - GARDA ERSA PRECEDENCE',
+                        reasons: ['GARDA ERSA precedence applies; AI does not recommend moving this RO into another repair class.'],
+                        reviewStatus: review.status || 'Open',
+                        reviewReason: review.reason || ''
+                    });
+                    return;
+                }
 
                 const repService = getBillingServiceFromRepClass(primaryRepClass);
                 const explicitPmHits = billingContainsAny(combinedText, explicitPmKeywords);
@@ -6007,10 +6059,29 @@
                 } else if (weakPmHits.length && repService !== 'PM') {
                     // Weak words like filter/oil/service are supporting context only and never create a PM recommendation alone.
                 }
-                const uniqueFlags = Array.from(new Set(flags));
-                if (!uniqueFlags.length) return;
                 const safeRo = safeFirebaseKey(g.roNumber);
                 const review = globalBillingReviewState[safeRo] || { status: 'Open' };
+                const exportTransferClass = recommendedClass || primaryRepClass || repClassList.join(', ') || 'Not Available';
+                const exportReasons = reasons.length
+                    ? reasons
+                    : ['No transfer recommended by current AI logic; current REPCLASS is supported or evidence is low-confidence.'];
+                addAiRecommendationExportRecord({
+                    safeRo,
+                    roNumber: g.roNumber,
+                    unitNo: g.unitNo || (roContext && roContext.unitNo) || fin.unitNo || '',
+                    coordinator,
+                    queueSource,
+                    currentStatus,
+                    originalClass: repClassList.join(', ') || primaryRepClass || 'Not Available',
+                    recommendedClass: exportTransferClass,
+                    spend,
+                    reasons: exportReasons,
+                    aiDecision: recommendedClass ? 'TRANSFER RECOMMENDED' : 'NO TRANSFER',
+                    reviewStatus: review.status || 'Open',
+                    reviewReason: review.reason || ''
+                });
+                const uniqueFlags = Array.from(new Set(flags));
+                if (!uniqueFlags.length) return;
                 const row = {
                     safeRo,
                     roNumber: g.roNumber,
