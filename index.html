@@ -1186,6 +1186,7 @@
         let globalBillingRows = [];
         let globalAiRecommendationRows = [];
         let globalVroExportRows = [];
+        let globalVroExportBySafeRo = {};
         let globalBillingIssueMap = {};
         let globalBillingReviewState = {};
         let globalPendingRepairClassReview = null;
@@ -3199,6 +3200,74 @@
             return rows;
         }
 
+        function getOrderFinancialBranchCode(order, roNumber = '') {
+            const safeRo = safeFirebaseKey(roNumber || (order && order.roNumber) || '');
+            const base = safeRo && globalVroExportBySafeRo ? globalVroExportBySafeRo[safeRo] : null;
+            const candidates = [
+                order && order.customerLocation,
+                order && order.customer,
+                order && order.branch,
+                base && base.customer,
+                base && base.branch,
+                base && base.shopId,
+                order && order.shop
+            ];
+            for (const candidate of candidates) {
+                const code = extractGardaCode(candidate) || normalizeShopIdForSpend(candidate) || normalizeBranchStr(candidate);
+                if (code) return code;
+            }
+            return '';
+        }
+
+        function buildLiveWeeklySpendHistoryRowsFromOrderFin() {
+            const rows = [];
+            const orderFin = window.globalOrderFin || {};
+            const { start, end } = getWeekStartEnd(new Date());
+            const weekKey = getWeekKey(new Date());
+            Object.keys(orderFin).forEach(roNumber => {
+                const order = orderFin[roNumber] || {};
+                const safeRo = safeFirebaseKey(roNumber);
+                const base = globalVroExportBySafeRo && globalVroExportBySafeRo[safeRo] ? globalVroExportBySafeRo[safeRo] : {};
+                const status = String(order.status || base.currentStatus || '').toUpperCase().trim();
+                const isClosedStatus = status.includes('CLOSED') || status.includes('COMPLETED') || status.includes('FINAL CHARGES') || status.includes('BILLED') || status.includes('INVOICED');
+                const isPendingStatus = status.includes('UNASSIGNED') || status.includes('ESTIMATE');
+                const opened = order.opened instanceof Date ? order.opened : parseDateSafe(order.opened || base.opened);
+                const closed = order.closedon instanceof Date ? order.closedon : parseDateSafe(order.closedon || order.complt || base.completed);
+                const closedThisWeek = closed && !isNaN(closed.getTime()) && closed >= start && closed < end;
+                const openedThisWeek = opened && !isNaN(opened.getTime()) && opened >= start && opened < end;
+                const qualifies = isClosedStatus ? closedThisWeek : (openedThisWeek && !isPendingStatus);
+                if (!qualifies) return;
+                const spend = Number(order.total || 0);
+                if (!spend) return;
+                const captureDate = isClosedStatus && closed ? closed : opened;
+                const row = {
+                    weekKey,
+                    safeRo,
+                    roNumber,
+                    unitNo: order.unitNo || base.unitNo || '',
+                    branch: order.customerLocation || order.customer || base.customer || base.branch || '',
+                    owner: order.contact || base.owner || '',
+                    previousStatus: '',
+                    currentStatus: status,
+                    captureType: isClosedStatus ? 'LIVE RO DETAIL CLOSED' : 'LIVE RO DETAIL WIP',
+                    capturedAt: captureDate && !isNaN(captureDate.getTime()) ? captureDate.toISOString() : new Date().toISOString(),
+                    openedDate: opened && !isNaN(opened.getTime()) ? opened.toISOString() : '',
+                    completedDate: closed && !isNaN(closed.getTime()) ? closed.toISOString() : '',
+                    spend,
+                    spendStatus: 'LIVE',
+                    spendSource: 'RO Detail live fallback',
+                    roUrl: getAuthRowRoUrl(roNumber),
+                    roWorkType: getWeeklyRoWorkType({ roNumber, roWorkType: order.roWorkType, roType: order.roType }),
+                    repClass: order.repClass || base.originalClass || ''
+                };
+                row.spendChannel = getWeeklySpendChannel(row);
+                const repairClassInfo = getRepairClassInfoForWeeklySpend(Object.assign({}, row, { currentSpend: spend }), false);
+                rows.push(Object.assign(row, repairClassInfo));
+            });
+            rows.sort((a, b) => new Date(b.capturedAt || 0) - new Date(a.capturedAt || 0));
+            return rows;
+        }
+
         function groupWeeklySpendHistory(rows) {
             const map = {};
             (rows || []).forEach(row => {
@@ -3241,6 +3310,14 @@
                     }
                 }
                 globalWeeklySpendHistoryRows = buildWeeklySpendHistoryRows(authData);
+                const currentHistorySummary = getCurrentWeekHistoryGovernorSummary();
+                if (!globalWeeklySpendHistoryRows.length || !currentHistorySummary || Number(currentHistorySummary.totalSpend || 0) <= 0) {
+                    const liveFallbackRows = buildLiveWeeklySpendHistoryRowsFromOrderFin();
+                    if (liveFallbackRows.length) {
+                        globalWeeklySpendHistoryRows = liveFallbackRows;
+                        if (window.globalAppFin) window.globalAppFin.source = 'live-ro-detail-fallback';
+                    }
+                }
                 syncGlobalAppFinFromWeeklyHistoryRows();
             } catch (err) {
                 console.warn('Weekly spend history load failed:', err);
@@ -3679,6 +3756,8 @@
                 if (!row || typeof row !== 'object') return;
                 const roNumber = getNormalizedRoNumber(getCol(row, ['Order', 'AFS RO #', 'RO Number', 'RONum', 'RO Num']));
                 if (!roNumber || !/\d/.test(roNumber)) return;
+                const customer = getCol(row, ['Customer', 'Customer Name', 'CustomerLocation', 'Customer Location', 'Branch', 'Site']);
+                const shopId = getCol(row, ['Shop ID', 'ShopID', 'Shop', 'Location ID']);
                 rows.push({
                     sourceRowNumber: idx + 1,
                     roNumber,
@@ -3687,6 +3766,11 @@
                     owner: getCol(row, ['Owner', 'Created By', 'Coordinator', 'Contact', 'Email']),
                     currentStatus: getCol(row, ['Status', 'PortalTab', 'Current Status']),
                     originalClass: getCol(row, ['Type', 'Original REPCLASS', 'RepClass', 'Repair Class', 'RepairClass']),
+                    customer,
+                    branch: customer,
+                    shopId,
+                    opened: getCol(row, ['Opened', 'ROOpenedDate', 'Opened_PST']),
+                    completed: getCol(row, ['Completed Date', 'Completed', 'COMPLT_PST']),
                     raw: row
                 });
             });
@@ -6518,6 +6602,12 @@
         function processExcelData(vroRaw, roDetailRaw, resourceRawAOA, oosRawAOA, usefulRawAOA, dodRawAOA) {
             const today = new Date(); today.setHours(0, 0, 0, 0);
             globalVroExportRows = buildVroExportRowsForAiReconciliation(vroRaw || []);
+            globalVroExportBySafeRo = {};
+            globalVroExportRows.forEach(base => {
+                if (base && base.safeRo && !globalVroExportBySafeRo[base.safeRo]) globalVroExportBySafeRo[base.safeRo] = base;
+            });
+            window.globalVroExportRows = globalVroExportRows;
+            window.globalVroExportBySafeRo = globalVroExportBySafeRo;
             
             branchUsefulMap = {};
             branchMetricsMap = {};
@@ -6841,6 +6931,21 @@
                 }
             }
 
+            Object.keys(orderFin).forEach(roNum => {
+                const safeRo = safeFirebaseKey(roNum);
+                const base = globalVroExportBySafeRo && globalVroExportBySafeRo[safeRo] ? globalVroExportBySafeRo[safeRo] : null;
+                if (!base) return;
+                orderFin[roNum].unitNo = orderFin[roNum].unitNo || base.unitNo || '';
+                orderFin[roNum].contact = orderFin[roNum].contact || base.owner || '';
+                orderFin[roNum].repClass = orderFin[roNum].repClass || base.originalClass || '';
+                orderFin[roNum].customerLocation = orderFin[roNum].customerLocation || base.customer || '';
+                orderFin[roNum].customer = orderFin[roNum].customer || base.customer || '';
+                orderFin[roNum].branch = orderFin[roNum].branch || base.branch || base.customer || '';
+                orderFin[roNum].vroExportShopId = base.shopId || '';
+                orderFin[roNum].financialBranchCode = getOrderFinancialBranchCode(orderFin[roNum], roNum);
+                if (!orderFin[roNum].status && base.currentStatus) orderFin[roNum].status = String(base.currentStatus || '').toUpperCase().trim();
+            });
+
             window.globalOrderFin = orderFin;
 
             function isThisWeek(d) {
@@ -6862,31 +6967,31 @@
 
             for (let roNum in orderFin) {
                 let order = orderFin[roNum];
-                
-                let bCode = normalizeShopIdForSpend(order.shop) || extractGardaCode(order.shop) || normalizeBranchStr(order.shop);
+                let bCode = order.financialBranchCode || getOrderFinancialBranchCode(order, roNum);
                 if (!bCode) continue;
 
                 if (!branchFin[bCode]) {
-                    branchFin[bCode] = { closedRev: 0, wipRev: 0 };
+                    branchFin[bCode] = { closedRev: 0, wipRev: 0, authorizedRev: 0 };
                 }
 
-                let isClosedTW = isThisWeek(order.closedon);
+                let isClosedTW = isThisWeek(order.closedon || order.complt);
                 let isOpenedTW = isThisWeek(order.opened);
+                let spendChannel = getWeeklySpendChannel({ roNumber: roNum, roWorkType: order.roWorkType, roType: order.roType });
+                if (spendChannel !== 'Vended') continue;
 
-                // Ensure we only count financial data for the VENDED network
-                if (branchToTeam[bCode] === 'VENDED REPAIR') {
-                    if (order.status.includes('CLOSED') || order.status.includes('COMPLETED') || order.status.includes('FINAL CHARGES') || order.status.includes('BILLED') || order.status.includes('INVOICED')) {
-                        if (isClosedTW) {
-                            branchFin[bCode].closedRev += order.total;
-                            globalClosedRev += order.total;
-                        }
-                    } else {
-                        // Accrue WIP strictly if opened this week AND is actively in WIP (Not unassigned/estimate)
-                        let isPending = order.status.includes('UNASSIGNED') || order.status.includes('ESTIMATE');
-                        if (isOpenedTW && !isPending) {
-                            branchFin[bCode].wipRev += order.total;
-                            globalWipRev += order.total;
-                        }
+                if (order.status.includes('CLOSED') || order.status.includes('COMPLETED') || order.status.includes('FINAL CHARGES') || order.status.includes('BILLED') || order.status.includes('INVOICED')) {
+                    if (isClosedTW) {
+                        branchFin[bCode].closedRev += order.total;
+                        branchFin[bCode].authorizedRev += order.total;
+                        globalClosedRev += order.total;
+                    }
+                } else {
+                    // Accrue WIP strictly if opened this week AND is actively in WIP (Not unassigned/estimate)
+                    let isPending = order.status.includes('UNASSIGNED') || order.status.includes('ESTIMATE');
+                    if (isOpenedTW && !isPending) {
+                        branchFin[bCode].wipRev += order.total;
+                        branchFin[bCode].authorizedRev += order.total;
+                        globalWipRev += order.total;
                     }
                 }
             }
@@ -6894,7 +6999,9 @@
             window.globalBranchFin = branchFin;
             window.globalAppFin = { 
                 closedRev: globalClosedRev, 
-                wipRev: globalWipRev 
+                wipRev: globalWipRev,
+                authorizedRev: globalClosedRev + globalWipRev,
+                source: 'live-ro-detail'
             };
             // --- FINANCIAL PROCESSING END ---
 
@@ -7301,6 +7408,12 @@
             });
 
             populateSummaryDropdowns();
+
+            globalWeeklySpendHistoryRows = buildLiveWeeklySpendHistoryRowsFromOrderFin();
+            syncGlobalAppFinFromWeeklyHistoryRows();
+            renderWeeklySpendHistory();
+            renderWeeklySpendTableSummary();
+            renderWeeklySpendDedicatedTableSummary();
 
             document.getElementById('upload-box').style.display = 'none';
             document.getElementById('home-dashboard').style.display = 'block';
@@ -7766,7 +7879,7 @@
         }
 
         function renderHomeDashboard() {
-            const container = document.getElementById('home-kpi-container'); container.innerHTML = '';
+            const container = document.getElementById('home-kpi-container'); if (!container) return; container.innerHTML = '';
             
             let aggData = processedData;
 
@@ -7795,7 +7908,7 @@
         }
 
         function renderKPITiles(ownersList, containerId, parentViewId) {
-            const container = document.getElementById(containerId); container.innerHTML = ''; 
+            const container = document.getElementById(containerId); if (!container) return; container.innerHTML = ''; 
             if(processedData.length === 0) return;
 
             let isPM = containerId === 'pm-kpi-container';
@@ -8518,7 +8631,7 @@
                 currentFilter = 'ALL';
             }
             document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-            document.getElementById(viewId).classList.add('active');
+            const targetView = document.getElementById(viewId); if (!targetView) return; targetView.classList.add('active');
             if(viewId !== 'search-view' && viewId !== 'person-view') lastActiveView = viewId;
             if(menuElement) {
                 document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
