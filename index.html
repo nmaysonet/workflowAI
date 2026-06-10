@@ -3875,7 +3875,7 @@
                     const spend = Number(issue.spend || 0);
                     const originalAllocation = getWeeklyBudgetAllocationForClass(originalClass, spend);
                     const transferAllocation = getWeeklyBudgetAllocationForClass(transferClass, spend);
-                    const whyTransfer = Array.isArray(issue.reasons) ? issue.reasons.join(' | ') : (issue.reason || issue.reasons || 'No transfer recommended by current AI logic.');
+                    const whyTransfer = Array.isArray(issue.reasons) ? issue.reasons.join(' | ') : (issue.reason || issue.reasons || 'No transfer recommended by current AI logic; current REPCLASS is supported or evidence is low-confidence.');
                     return {
                         'AFS RO #': roNumber,
                         'Unit No': issue.unitNo || '',
@@ -5441,6 +5441,29 @@
             return codeMatches || normalizedText.includes('POWERPLANT DIAGNOSTICS');
         }
 
+        function isAccidentDamageRepairEvidence(componentCode, componentDescription, extraText) {
+            const rawCode = String(componentCode || '').toUpperCase().trim();
+            const codeCompact = rawCode.replace(/\s+/g, '');
+            const codeDigits = rawCode.replace(/[^0-9]/g, '');
+            const normalizedText = normalizeRepairEvidenceText(`${componentDescription || ''} ${extraText || ''}`);
+            const codeMatches =
+                codeCompact === '999-014' ||
+                codeCompact === '999014' ||
+                codeDigits === '999014';
+            const accidentPhrases = [
+                'ACCIDENT', 'ACCIDENT DAMAGE', 'ACC DAM', 'COLLISION', 'CRASH', 'STRUCK', 'HIT', 'IMPACT',
+                'BODY DAMAGE', 'PHYSICAL DAMAGE', 'DAMAGE FROM COLLISION', 'INVOLVED IN COLLISION',
+                'BACKED INTO', 'SCRAPED', 'DEER STRIKE', 'WINDSHIELD IMPACT', 'MIRROR DAMAGE',
+                'BUMPER DAMAGE', 'HOOD DAMAGE', 'DOOR DAMAGE', 'PANEL DAMAGE'
+            ];
+            const hasAccidentText = accidentPhrases.some(p => normalizedText.includes(normalizeRepairEvidenceText(p)));
+            const hasDamage3Cs = normalizedText.includes('COMPLAINT') &&
+                normalizedText.includes('CAUSE') &&
+                normalizedText.includes('CORRECTION') &&
+                normalizedText.includes('DAMAGE');
+            return (codeMatches && (hasAccidentText || normalizedText.includes('DAMAGE'))) || hasAccidentText || hasDamage3Cs;
+        }
+
         function normalizeRepairEvidenceText(value) {
             return String(value || '')
                 .toUpperCase()
@@ -5455,6 +5478,47 @@
         function hasRepairEvidencePhrase(text, phrases) {
             const normalized = normalizeRepairEvidenceText(text);
             return (phrases || []).some(p => normalized.includes(normalizeRepairEvidenceText(p)));
+        }
+
+        function getMeaningfulAgingRepairContextValue(value, fieldName) {
+            const raw = String(value || '').trim();
+            const normalized = normalizeRepairEvidenceText(raw);
+            if (!normalized || ['NA', 'N A', 'NONE', 'NULL', 'NIL', 'UNKNOWN', 'UNKN', 'TBD', 'N/A'].includes(normalized)) return '';
+
+            const field = String(fieldName || '').toUpperCase();
+            if (field.includes('COMPLAINT')) {
+                // Aging Repairs often uses CHECK as a baseline/default complaint. It is not inspection evidence.
+                if (['CHECK', 'CHK', 'CHECK UNIT', 'CHECK VEHICLE', 'CHECK TRUCK', 'CHECK RO', 'CHECK REPAIR'].includes(normalized)) return '';
+            }
+            if (field.includes('REASON')) {
+                // DRIVERREPORT / DRIVER REPORT is a baseline/default reason. It only matters when the narrative provides actual details.
+                if (['DRIVERREPORT', 'DRIVER REPORT', 'DRIVER REPORTED', 'DRVR REPORT', 'DRIVER', 'CUSTOMER REPORT'].includes(normalized)) return '';
+            }
+            return raw;
+        }
+
+        function getExplicitPmInspectionHits(text) {
+            const normalized = normalizeRepairEvidenceText(text);
+            if (!normalized) return [];
+            const hits = [];
+            const phraseChecks = [
+                'PREVENTIVE MAINTENANCE', 'PREVENTATIVE MAINTENANCE', 'PM SERVICE', 'PM INSPECTION',
+                'PM A', 'PM B', 'PM C', 'PMA', 'PMB', 'PMC',
+                'DOT INSPECTION', 'DOT', 'BIT INSPECTION', 'ANNUAL INSPECTION', 'STATE INSPECTION',
+                'SAFETY INSPECTION', 'CARB INSPECTION', 'CARB', 'INSPECTION ONLY', 'INSPECT ONLY',
+                'UNIT NEEDS A/C INSPECTION', 'UNIT NEEDS AC INSPECTION', 'A/C INSPECTION', 'AC INSPECTION',
+                'A C INSPECTION', 'HVAC INSPECTION', 'INSPECT A/C', 'INSPECT AC', 'INSPECT A C',
+                'INSPECT HVAC', 'OIL CHANGE', 'OIL AND FILTER', 'LUBE SERVICE', 'SERVICE INTERVAL', 'SCHEDULED PM'
+            ];
+            phraseChecks.forEach(p => {
+                const np = normalizeRepairEvidenceText(p);
+                if (np && normalized.includes(np)) hits.push(p);
+            });
+            if (/\bPM\s*[ABC]\b/.test(normalized)) hits.push('PM A/B/C');
+            if (/\bPM\b/.test(normalized)) hits.push('PM');
+            if (/\bDOT\b/.test(normalized)) hits.push('DOT');
+            if (/\bCARB\b/.test(normalized)) hits.push('CARB');
+            return Array.from(new Set(hits));
         }
 
 
@@ -5554,12 +5618,8 @@
                 (Array.isArray(g && g.componentCodes) && g.componentCodes.some(code => isPowerplantDiagnosticsEvidence(code, componentText, notesText))) ||
                 allText.includes('POWERPLANT DIAGNOSTICS');
 
-            const pmInspectionPhrases = [
-                'STATE INSPECTION', 'SAFETY INSPECTION', 'DOT INSPECTION', 'BIT INSPECTION', 'ANNUAL INSPECTION',
-                'PM INSPECTION', 'PM SERVICE', 'PREVENTIVE MAINTENANCE', 'PREVENTATIVE MAINTENANCE',
-                'INSPECTION ONLY', 'INSPECT ONLY', 'OIL CHANGE', 'OIL AND FILTER', 'LUBE SERVICE', 'AUTHORIZED BY GARDA STATE INSPECTION'
-            ];
-            const hasInspectionPmNotes = hasRepairEvidencePhrase(notesText, pmInspectionPhrases);
+            const pmInspectionHits = getExplicitPmInspectionHits(notesText);
+            const hasInspectionPmNotes = pmInspectionHits.length > 0;
 
             const hasPartsLine = lineTypes.some(t => /(^|\s)(PART|PARTS|MATERIAL|MATERIALS)(\s|$)/.test(t));
             const routinePartsPhrases = [
@@ -5668,13 +5728,42 @@
 
         function classifyHvacDiagnosticsRepair(g, combinedText) {
             const text = String(combinedText || '').toUpperCase();
-            const normalized = text.replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+            const normalized = normalizeRepairEvidenceText(text);
             const lineTypes = Array.isArray(g && g.lineTypes) ? g.lineTypes.map(v => String(v || '').toUpperCase()) : [];
             const lineDescriptions = Array.isArray(g && g.lineDescriptions) ? g.lineDescriptions.map(v => String(v || '').toUpperCase()) : [];
             const componentDescriptions = Array.isArray(g && g.componentDescriptions) ? g.componentDescriptions.map(v => String(v || '').toUpperCase()) : [];
+            const componentCodes = Array.isArray(g && g.componentCodes) ? g.componentCodes.map(v => String(v || '').toUpperCase().trim()) : [];
+            const meaningfulContext = normalizeRepairEvidenceText([
+                ...(Array.isArray(g && g.sectionComments) ? g.sectionComments : []),
+                ...(Array.isArray(g && g.lineDescriptions) ? g.lineDescriptions : []),
+                ...(Array.isArray(g && g.additionalNotes) ? g.additionalNotes : []),
+                ...(Array.isArray(g && g.complaints) ? g.complaints : []),
+                ...(Array.isArray(g && g.reasons) ? g.reasons : [])
+            ].join(' | '));
             const hvacSource = `${normalized} ${componentDescriptions.join(' ')} ${lineDescriptions.join(' ')}`;
-            const hasHvac = /\bHVAC\b/.test(hvacSource) || /\bA\s*C\b/.test(hvacSource) || hvacSource.includes('A C ') || hvacSource.includes('AIR CONDITION') || hvacSource.includes('AIR COND') || hvacSource.includes('AC DIAG') || hvacSource.includes('A/C');
-            const hasDiagOrInspection = hvacSource.includes('DIAGNOSTIC') || hvacSource.includes('DIAG') || hvacSource.includes('INSPECTION') || hvacSource.includes('INSPECT');
+            const hasHvacDiagCode = componentCodes.some(code => {
+                const digits = String(code || '').replace(/[^0-9]/g, '');
+                return digits === '001001999';
+            });
+            const hasHvac =
+                hasHvacDiagCode ||
+                /\bHVAC\b/.test(hvacSource) ||
+                /\bA\s*C\b/.test(hvacSource) ||
+                hvacSource.includes('A C ') ||
+                hvacSource.includes('A/C') ||
+                hvacSource.includes('AIR CONDITION') ||
+                hvacSource.includes('AIR COND') ||
+                hvacSource.includes('HEATING & AIR CONDITIONING') ||
+                hvacSource.includes('HEATING AND AIR CONDITIONING');
+            const hasDiagOrInspection =
+                hasHvacDiagCode ||
+                hvacSource.includes('HVAC DIAGNOSTIC') ||
+                hvacSource.includes('HVAC DIAG') ||
+                hvacSource.includes('A/C DIAG') ||
+                hvacSource.includes('AC DIAG') ||
+                hvacSource.includes('A C DIAG') ||
+                hvacSource.includes('DIAGNOSTIC') ||
+                hvacSource.includes('DIAG');
             if (!hasHvac || !hasDiagOrInspection) return null;
 
             const hasBlowerMotor = hvacSource.includes('BLOWER MOTOR');
@@ -5690,17 +5779,48 @@
             const hasHvacPartKeyword = hvacPartKeywords.some(k => hvacSource.includes(k));
             const hasRoutineParts = hasBlowerMotor || hasPartLine || hasPartsOnOrderText || hasHvacPartKeyword;
 
-            const hasRecharge = hvacSource.includes('RECHARGE') || hvacSource.includes('RE-CHARGE') || hvacSource.includes('RECHARGED') || hvacSource.includes('REFRIGERANT CHARGE') || hvacSource.includes('CHARGE A C') || hvacSource.includes('CHARGE AC') || hvacSource.includes('FREON');
+            const pmInspectionHits = getExplicitPmInspectionHits(meaningfulContext);
+            const hasActualAcInspectionNote = hasRepairEvidencePhrase(meaningfulContext, [
+                'UNIT NEEDS A/C INSPECTION', 'UNIT NEEDS AC INSPECTION', 'A/C INSPECTION', 'AC INSPECTION',
+                'A C INSPECTION', 'HVAC INSPECTION', 'INSPECT A/C', 'INSPECT AC', 'INSPECT A C', 'INSPECT HVAC'
+            ]);
+            const hasExplicitPmOrInspection = pmInspectionHits.length > 0 || hasActualAcInspectionNote;
+
+            const hasRepairComplaint = hasRepairEvidencePhrase(meaningfulContext, [
+                'A/C NOT FUNCTIONING', 'AC NOT FUNCTIONING', 'A C NOT FUNCTIONING',
+                'A/C NOT WORKING', 'AC NOT WORKING', 'A C NOT WORKING',
+                'A/C INOP', 'AC INOP', 'HVAC INOP', 'NO A/C', 'NO AC', 'NO A C',
+                'NOT COOLING', 'BLOWING WARM', 'BLOWING HOT', 'DOES NOT COOL',
+                'INOPERATIVE', 'INOP', 'FAILED', 'FAILURE', 'LEAK', 'LEAKING'
+            ]);
+
+            // HVAC Diagnostics / 001-001-999 should not automatically default to OSC PM.
+            // It is OSC PM only when the actual notes say PM / inspection / preventative maintenance.
+            // Otherwise, an A/C issue such as "A/C not functioning" is routine corrective repair and should be SCHEDULED.
+            if (hasExplicitPmOrInspection && !hasRoutineParts && !hasRepairComplaint) {
+                return {
+                    recommendedClass: 'OSC PM',
+                    reason: `HVAC diagnostics has explicit PM/inspection evidence (${(pmInspectionHits[0] || 'A/C inspection')}) and no repair/parts evidence, so it supports OSC PM.`
+                };
+            }
             if (hasRoutineParts) {
                 return {
                     recommendedClass: 'SCHEDULED',
-                    reason: hasBlowerMotor ? 'HVAC diagnostics includes blower motor / parts evidence, which is routine repair and should be SCHEDULED.' : 'HVAC diagnostics includes parts evidence, which should be SCHEDULED instead of OSC PM.'
+                    reason: hasBlowerMotor
+                        ? 'HVAC diagnostics includes blower motor / parts evidence, which is routine corrective repair and should be SCHEDULED.'
+                        : 'HVAC diagnostics includes parts or ordered-parts evidence, which should be SCHEDULED instead of OSC PM.'
                 };
             }
-            if (hasRecharge) {
-                return { recommendedClass: 'OSC PM', reason: 'HVAC diagnostics only shows A/C recharge/refrigerant service with no parts evidence, which can remain OSC PM.' };
+            if (hasRepairComplaint) {
+                return {
+                    recommendedClass: 'SCHEDULED',
+                    reason: 'HVAC diagnostics notes describe an actual A/C/HVAC malfunction, which is routine corrective repair and should default to SCHEDULED unless the notes explicitly state PM or inspection-only work.'
+                };
             }
-            return { recommendedClass: 'OSC PM', reason: 'HVAC diagnostics / A/C inspection with no parts evidence can remain OSC PM.' };
+            return {
+                recommendedClass: 'SCHEDULED',
+                reason: 'HVAC diagnostics / A/C diagnostics without explicit PM, preventative-maintenance, annual/state/DOT/CARB inspection, or inspection-only language should default to SCHEDULED.'
+            };
         }
 
         function getBillingRoUrl(roNum) {
@@ -5768,6 +5888,16 @@
                         : `Driver-abuse signal(s) from notes/3Cs/line detail (${driverAbuseHits.slice(0, 4).join(', ')}) support DRIVER ABUSE review.`
                 };
             }
+            const accidentDamageHits = Array.isArray(hits.accidentDamageHits) && hits.accidentDamageHits.length
+                ? hits.accidentDamageHits
+                : billingContainsAny(text, ['ACCIDENT','ACCIDENT DAMAGE','ACC DAM','COLLISION','CRASH','STRUCK','IMPACT','HIT ',' HIT','BODY DAMAGE','PHYSICAL DAMAGE','DAMAGE FROM COLLISION','INVOLVED IN COLLISION','BACKED INTO','SCRAPED','DEER','BUMPER DAMAGE','HOOD DAMAGE','DOOR DAMAGE','PANEL DAMAGE','MIRROR DAMAGE','WINDSHIELD IMPACT']);
+            const hasAccidentEvidence = !!hits.accidentDamageEvidence || accidentDamageHits.length > 0;
+            if (hasAccidentEvidence && !isAlready('ACC')) {
+                return {
+                    recommendedClass: 'ACCIDENT DAMAGE',
+                    reason: `Accident/physical-damage evidence from notes/3Cs/component sections (${accidentDamageHits.slice(0, 5).join(', ') || '999-014 Accident / body damage evidence'}) supports ACCIDENT DAMAGE. Accident evidence overrides generic diagnostics or engine/transmission wording when there is no clear deferred-maintenance repair evidence.`
+                };
+            }
             const hasMajorEvidence = !!(hits.majorHits && hits.majorHits.length);
             const complexity = hits.orderComplexity || {};
             const hasComplexPartsRepair = !!(complexity.hasComplexPartsRepair || complexity.hasMultiSectionPartsSignal || complexity.hasMajorComponentSignal);
@@ -5794,7 +5924,7 @@
                     return { recommendedClass: 'SCHEDULED', reason: hits.hvacDiagnostics.reason || 'HVAC diagnostics with parts evidence should be SCHEDULED.' };
                 }
                 if (hvacClass === 'OSC PM' && !(isAlready('OSC PM') || current === 'PM')) {
-                    return { recommendedClass: 'OSC PM', reason: hits.hvacDiagnostics.reason || 'HVAC diagnostics / A/C inspection with no parts evidence can remain OSC PM.' };
+                    return { recommendedClass: 'OSC PM', reason: hits.hvacDiagnostics.reason || 'HVAC diagnostics has explicit PM/inspection evidence and no repair/parts evidence, supporting OSC PM.' };
                 }
             }
             if (hits.aggressiveNotesReview && hits.aggressiveNotesReview.recommendedClass) {
@@ -5847,17 +5977,36 @@
             }
 
             const groups = {};
+            const headerRow = agingRawAOA[0] || [];
+            const normalizeHeaderKey = value => String(value || '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
+            const headerIndex = {};
+            headerRow.forEach((header, idx) => {
+                const key = normalizeHeaderKey(header);
+                if (key && headerIndex[key] === undefined) headerIndex[key] = idx;
+            });
+            const findHeaderIndex = (names, fallback) => {
+                for (const name of names) {
+                    const key = normalizeHeaderKey(name);
+                    if (headerIndex[key] !== undefined) return headerIndex[key];
+                }
+                return fallback;
+            };
             const IDX = {
-                ro: 9, unit: 18,
-                familyComponentDescription: 33,
-                componentCode: 34,
-                componentDescription: 35,
-                repClass: 39,
-                sectionComment: 40,
-                lineType: 41,
-                lineDescription: 42,
-                quantity: 43,
-                additionalNotes: 67
+                ro: findHeaderIndex(['RONum', 'RO Number', 'AFS RO Number'], 9),
+                unit: findHeaderIndex(['UnitNumber', 'Unit No', 'Unit'], 18),
+                familyComponentDescription: findHeaderIndex(['FamilyComponentDescription', 'Family Component Description'], 33),
+                componentCode: findHeaderIndex(['ComponentCode', 'Component Code', 'VMRS Code'], 34),
+                componentDescription: findHeaderIndex(['ComponentDescription', 'Component Description'], 35),
+                complaint: findHeaderIndex(['ROComplaint', 'RO Complaint', 'Complaint'], 36),
+                reason: findHeaderIndex(['ROReason', 'RO Reason', 'Reason'], 37),
+                repairSite: findHeaderIndex(['RORepairSite', 'RO Repair Site', 'Repair Site'], 38),
+                repClass: findHeaderIndex(['RORepairClass', 'REPCLASS', 'Repair Class'], 39),
+                sectionComment: findHeaderIndex(['ROSectionComment', 'RO Section Comment', 'Section Comment'], 40),
+                lineType: findHeaderIndex(['ROLineType', 'RO Line Type', 'Line Type'], 41),
+                lineDescription: findHeaderIndex(['ROLineDescription', 'RO Line Description', 'Line Description'], 42),
+                quantity: findHeaderIndex(['HOURS/QTY', 'Hours Qty', 'Quantity', 'Qty'], 43),
+                portalNotes: findHeaderIndex(['Portal Notes', 'PortalNotes'], 66),
+                additionalNotes: findHeaderIndex(['notes', 'Notes', 'Additional Notes'], 67)
             };
 
             function parseQty(v) {
@@ -5877,6 +6026,9 @@
                         familyComponents: [],
                         componentCodes: [],
                         componentDescriptions: [],
+                        complaints: [],
+                        reasons: [],
+                        repairSites: [],
                         sectionComments: [],
                         lineTypes: [],
                         lineDescriptions: [],
@@ -5884,6 +6036,7 @@
                         specialProjectCameraSystem: false,
                         brakeDiagnosticsScheduled: false,
                         powerplantDiagnostics: false,
+                        accidentDamageEvidence: false,
                         tireQty: 0,
                         lineCount: 0
                     };
@@ -5894,13 +6047,22 @@
                 const family = String(row[IDX.familyComponentDescription] || '').trim();
                 const compCode = String(row[IDX.componentCode] || '').trim();
                 const compDesc = String(row[IDX.componentDescription] || '').trim();
+                const complaint = getMeaningfulAgingRepairContextValue(row[IDX.complaint], 'ROComplaint');
+                const reason = getMeaningfulAgingRepairContextValue(row[IDX.reason], 'ROReason');
+                const repairSite = getMeaningfulAgingRepairContextValue(row[IDX.repairSite], 'RORepairSite');
                 const section = String(row[IDX.sectionComment] || '').trim();
                 const lineType = String(row[IDX.lineType] || '').trim();
                 const lineDesc = String(row[IDX.lineDescription] || '').trim();
-                const notes = String(row[IDX.additionalNotes] || '').trim();
+                const notes = Array.from(new Set([
+                    String(row[IDX.portalNotes] || '').trim(),
+                    String(row[IDX.additionalNotes] || '').trim()
+                ].filter(Boolean))).join(' | ');
                 if (family) g.familyComponents.push(family);
                 if (compCode) g.componentCodes.push(compCode);
                 if (compDesc) g.componentDescriptions.push(compDesc);
+                if (complaint) g.complaints.push(complaint);
+                if (reason) g.reasons.push(reason);
+                if (repairSite) g.repairSites.push(repairSite);
                 if (section) g.sectionComments.push(section);
                 if (lineType) g.lineTypes.push(lineType);
                 if (lineDesc) g.lineDescriptions.push(lineDesc);
@@ -5914,6 +6076,9 @@
                 if (isPowerplantDiagnosticsEvidence(compCode, compDesc, `${family} ${section} ${lineDesc} ${notes}`)) {
                     g.powerplantDiagnostics = true;
                 }
+                if (isAccidentDamageRepairEvidence(compCode, compDesc, `${family} ${section} ${lineDesc} ${notes}`)) {
+                    g.accidentDamageEvidence = true;
+                }
                 const tireText = `${family} ${compDesc} ${lineDesc}`.toLowerCase();
                 if (tireText.includes('tire') || tireText.includes('tyre')) g.tireQty += parseQty(row[IDX.quantity]) || 1;
                 g.lineCount += 1;
@@ -5925,12 +6090,13 @@
             // Repair-class detection must be conservative. Weak words like "filter", "oil",
             // "inspection", or "service" can appear inside major repairs and should not flip
             // a repair to PM by themselves. Major repair / excludable evidence overrides weak PM signals.
-            const explicitPmKeywords = ['preventive maintenance', 'preventative maintenance', 'pm service', 'pm inspection', 'dot inspection', 'bit inspection', 'annual inspection', 'safety inspection', 'state inspection', 'oil change', 'oil and filter service', 'lube service', 'service interval', 'scheduled pm'];
+            const explicitPmKeywords = ['preventive maintenance', 'preventative maintenance', 'pm service', 'pm inspection', 'pm a', 'pm b', 'pm c', 'pma', 'pmb', 'pmc', 'dot inspection', 'dot', 'bit inspection', 'annual inspection', 'safety inspection', 'state inspection', 'carb inspection', 'carb', 'oil change', 'oil and filter service', 'lube service', 'service interval', 'scheduled pm'];
             const weakPmKeywords = ['filter', 'oil', 'inspection', 'service', 'lube'];
             const ersKeywords = ['roadside', 'road call', 'no start', 'jump start', 'tow', 'towing', 'breakdown', 'disabled', 'emergency', 'unit down roadside', 'mobile rescue', 'tire blowout', 'locked out'];
             const majorRepairKeywords = ['engine', 'engine replacement', 'replace engine', 'transmission', 'transmission replacement', 'aftertreatment', 'dpf', 'diesel particulate filter', 'scr', 'doc', 'nox', 'emissions', 'regen', 'def system', 'turbo', 'injector', 'egr', 'egr cooler', 'radiator', 'coolant', 'powertrain', 'drivetrain', 'differential', 'rear end', 'axle', 'transfer case', 'overhaul', 'rebuild', 'failed', 'failure', 'derate', 'large brake overhaul', 'brake overhaul', 'front and rear brake'];
             const excludableKeywords = ['accident', 'collision', 'driver abuse', 'misuse', 'vandalism', 'damage', 'deferred maintenance', 'deferred', 'engine replacement', 'transmission', 'aftertreatment', 'dpf', 'emissions', 'regen', 'def in fuel', 'fuel contamination', 'road hazard', 'sidewall', 'lockout', 'lost key', 'customer direct', 'cust direct', 'customer used', 'branch sent', 'not dispatched by amerit', 'samsara', 'camera install', 'retrofit', 'upfit', 'merchant'];
             const driverAbuseKeywords = ['driver abuse', 'driver caused', 'operator error', 'road hazard', 'sidewall', 'lockout', 'lost key', 'misfuel', 'def in fuel', 'fuel contamination', 'out of fuel', 'ignored warning', 'ignored regen', 'parked regen', 'regen', 'derate', 'derated', 'de-rate', 'de rate'];
+            const accidentDamageKeywords = ['accident', 'accident damage', 'acc dam', 'collision', 'crash', 'struck', 'impact', 'hit ', ' hit', 'body damage', 'physical damage', 'damage from collision', 'involved in collision', 'backed into', 'scraped', 'deer strike', 'bumper damage', 'hood damage', 'door damage', 'panel damage', 'mirror damage', 'windshield impact'];
 
             function addAiRecommendationExportRecord(details) {
                 const roNumber = String(details.roNumber || '').trim();
@@ -5967,7 +6133,8 @@
                 const coordinator = (roContext && roContext.owner) || fin.contact || '';
                 const spend = Number(fin.total || 0);
                 const combinedText = [
-                    ...g.familyComponents, ...g.componentDescriptions, ...g.sectionComments,
+                    ...g.familyComponents, ...g.componentCodes, ...g.componentDescriptions,
+                    ...g.complaints, ...g.reasons, ...g.repairSites, ...g.sectionComments,
                     ...g.lineDescriptions, ...g.additionalNotes
                 ].join(' | ');
                 const repClassList = Array.from(g.repClasses);
@@ -6005,7 +6172,28 @@
                 const driverAbuseHits = billingContainsAny(combinedText, driverAbuseKeywords);
                 const primaryRepUpper = String(primaryRepClass || '').toUpperCase();
                 const hasDriverRiskCameraOverride = g.specialProjectCameraSystem || g.componentCodes.some(code => isDriverRiskManagementCameraSystemEvidence(code, combinedText, combinedText));
-                if (hasDriverRiskCameraOverride && primaryRepUpper.includes('SPECIAL')) return;
+                if (hasDriverRiskCameraOverride && primaryRepUpper.includes('SPECIAL')) {
+                    const safeRo = safeFirebaseKey(g.roNumber);
+                    const review = globalBillingReviewState[safeRo] || { status: 'Open' };
+                    addAiRecommendationExportRecord({
+                        safeRo,
+                        roNumber: g.roNumber,
+                        unitNo: g.unitNo || (roContext && roContext.unitNo) || fin.unitNo || '',
+                        coordinator,
+                        queueSource,
+                        currentStatus,
+                        originalClass: repClassList.join(', ') || primaryRepClass || 'SPECIAL PROJECT',
+                        recommendedClass: repClassList.join(', ') || primaryRepClass || 'SPECIAL PROJECT',
+                        spend,
+                        aiDecision: 'NO TRANSFER - SPECIAL PROJECT ALREADY SUPPORTED',
+                        reasons: ['Camera/install evidence supports the current SPECIAL PROJECT classification; no transfer recommended.'],
+                        reviewStatus: review.status || 'Open',
+                        reviewReason: review.reason || ''
+                    });
+                    return;
+                }
+                const hasAccidentDamageEvidence = g.accidentDamageEvidence || isAccidentDamageRepairEvidence('', '', combinedText);
+                const accidentDamageHits = billingContainsAny(combinedText, accidentDamageKeywords);
                 const hasBrakeDiagnosticsScheduled = g.brakeDiagnosticsScheduled || g.componentCodes.some(code => isBrakeDiagnosticsScheduledEvidence(code, combinedText, combinedText));
                 const hvacDiagnostics = classifyHvacDiagnosticsRepair(g, combinedText);
                 const aggressiveNotesReview = classifyAggressiveNotesRepairClass(g, combinedText, spend);
@@ -6019,7 +6207,7 @@
                 let recommendedClass = '';
                 let responsibleQueue = normalizeQueueNameForRepairClass(queueSource);
 
-                const explicitRecommendation = determineRecommendedRepairClassFromEvidence(primaryRepClass, combinedText, spend, g.tireQty, { majorHits, driverAbuseHits, specialProjectCameraSystem: hasDriverRiskCameraOverride, brakeDiagnosticsScheduled: hasBrakeDiagnosticsScheduled, hvacDiagnostics, aggressiveNotesReview, orderComplexity });
+                const explicitRecommendation = determineRecommendedRepairClassFromEvidence(primaryRepClass, combinedText, spend, g.tireQty, { majorHits, driverAbuseHits, accidentDamageHits, accidentDamageEvidence: hasAccidentDamageEvidence, specialProjectCameraSystem: hasDriverRiskCameraOverride, brakeDiagnosticsScheduled: hasBrakeDiagnosticsScheduled, hvacDiagnostics, aggressiveNotesReview, orderComplexity });
                 if (explicitRecommendation) {
                     recommendedClass = explicitRecommendation.recommendedClass;
                     responsibleQueue = getResponsibleQueueForRecommendation(recommendedClass, queueSource);
