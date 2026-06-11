@@ -2358,6 +2358,73 @@
             return 'UNKNOWN';
         }
 
+
+
+        function hasGardaTextSignal(value) {
+            return /\bGARDA\b|GARDAWORLD|GARDA\s*WORLD/i.test(String(value || ''));
+        }
+
+        function hasKnownNonGardaCustomerSignal(value) {
+            const raw = String(value || '').toUpperCase();
+            if (!raw) return false;
+            return raw.includes('BRINK') ||
+                raw.includes('LOOMIS') ||
+                raw.includes('PUROLATOR') ||
+                raw.includes('COLONY') ||
+                raw.includes('PURPLE WAVE') ||
+                raw.includes('NATIONAL RESCUE') ||
+                raw.includes('DUNBAR') ||
+                raw.includes('ROCHESTER');
+        }
+
+        function isGardaSpendRecord(rowLike) {
+            const row = rowLike || {};
+            const roNumber = String((row.roNumber || row.roNum || row.order || '') || '').toUpperCase().trim();
+            const fin = window.globalOrderFin && roNumber ? window.globalOrderFin[roNumber] : null;
+            const roContext = (typeof findProcessedRoForWeeklySpend === 'function') ? findProcessedRoForWeeklySpend(row) : null;
+
+            const trueCustomerSignals = [
+                row.trueCustomer,
+                row.customerName,
+                row.customerAccount,
+                row.accountCustomer,
+                row.billingCustomer,
+                fin && fin.customer
+            ].filter(v => String(v || '').trim());
+
+            if (trueCustomerSignals.length) {
+                if (trueCustomerSignals.some(hasGardaTextSignal)) return true;
+                if (trueCustomerSignals.some(hasKnownNonGardaCustomerSignal)) return false;
+                return false;
+            }
+
+            const locationSignals = [
+                row.customer,
+                row.customerLocation,
+                row.branch,
+                row.shop,
+                row.region,
+                row.subregion,
+                fin && fin.customerLocation,
+                fin && fin.shop,
+                roContext && roContext.customer,
+                roContext && roContext.branch,
+                roContext && roContext.customerLocation
+            ].filter(v => String(v || '').trim());
+
+            if (locationSignals.some(hasGardaTextSignal)) return true;
+            if (locationSignals.some(hasKnownNonGardaCustomerSignal)) return false;
+
+            if (String(row.custKey || '').toUpperCase().trim() === 'GARDA') return true;
+            if (roContext && String(roContext.custKey || '').toUpperCase().trim() === 'GARDA') return true;
+
+            return false;
+        }
+
+        function filterGardaSpendRows(rows) {
+            return (rows || []).filter(row => isGardaSpendRecord(row));
+        }
+
         function getCol(row, possibleNames) {
             const rowKeys = Object.keys(row);
             for (let name of possibleNames) {
@@ -2839,6 +2906,7 @@
         function isSpendGovernedRo(ro) {
             if (!ro || !ro.roNum) return false;
             if (String(ro.roNum).startsWith('NO RO') || String(ro.roNum).startsWith('SEE_OTHER:')) return false;
+            if (!isGardaSpendRecord(ro)) return false;
 
             const bCode = extractGardaCode(ro.branch) || normalizeBranchStr(ro.branch);
             if (!bCode) return false;
@@ -2847,13 +2915,13 @@
                 return globalBranchToTeam[bCode] === 'VENDED REPAIR';
             }
 
-            // Safe fallback: if branch/team mapping is missing, only include records that live in the Vended owner population.
+            // Safe fallback: if branch/team mapping is missing, only include Garda records that live in the Vended owner population.
             return ro.drilldownOwners && ro.drilldownOwners.some(o => vendedOwners.includes(o));
         }
 
         function getCurrentWeekHistoryGovernorSummary() {
             const weekKey = getWeekKey(new Date());
-            const rows = (globalWeeklySpendHistoryRows || []).filter(row => row && row.weekKey === weekKey);
+            const rows = filterGardaSpendRows(globalWeeklySpendHistoryRows || []).filter(row => row && row.weekKey === weekKey);
             if (!rows.length) return null;
             const uniqueRos = new Set();
             let totalSpend = 0;
@@ -2939,7 +3007,8 @@
                 const roEvents = raw[safeRo] || {};
                 Object.keys(roEvents).forEach(eventKey => {
                     const e = roEvents[eventKey] || {};
-                    rows.push(Object.assign({ safeRo, eventKey }, e));
+                    const row = Object.assign({ safeRo, eventKey }, e);
+                    if (isGardaSpendRecord(row)) rows.push(row);
                 });
             });
             rows.sort((a, b) => new Date(b.changedAt || 0) - new Date(a.changedAt || 0));
@@ -2959,6 +3028,7 @@
                 Object.keys(weekAuths).forEach(safeRo => {
                     const auth = weekAuths[safeRo] || {};
                     const roNum = auth.roNumber || safeRo;
+                    if (!isGardaSpendRecord(Object.assign({}, auth, { safeRo, roNumber: roNum, weekKey }))) return;
                     const currentSpend = Number(auth.spend || 0);
 
                     if (auth.authorizedAt) {
@@ -3326,6 +3396,7 @@
                 const weekAuths = authData[weekKey] || {};
                 Object.keys(weekAuths).forEach(safeRo => {
                     const auth = weekAuths[safeRo] || {};
+                    if (!isGardaSpendRecord(Object.assign({}, auth, { safeRo, weekKey, roNumber: auth.roNumber || auth.roNum || safeRo }))) return;
                     if (getWeeklyBudgetSnapshot(auth)) return;
                     const snapshot = buildWeeklyBudgetSnapshotFromAuth(weekKey, safeRo, auth);
                     if (!snapshot) return;
@@ -3355,6 +3426,7 @@
                 Object.keys(weekAuths).forEach(safeRo => {
                     const auth = weekAuths[safeRo] || {};
                     const roNumber = auth.roNumber || auth.roNum || safeRo;
+                    if (!isGardaSpendRecord(Object.assign({}, auth, { safeRo, weekKey, roNumber }))) return;
                     const snapshot = getWeeklyBudgetSnapshot(auth);
                     const displaySpend = Number(snapshot && snapshot.spend !== undefined ? snapshot.spend : (auth.spend !== undefined ? auth.spend : auth.currentSpend || 0));
                     const baseRow = {
@@ -3452,7 +3524,7 @@
             const container = document.getElementById('weekly-spend-history-body');
             if (!container) return;
 
-            const groups = groupWeeklySpendHistory(globalWeeklySpendHistoryRows || []);
+            const groups = groupWeeklySpendHistory(filterGardaSpendRows(globalWeeklySpendHistoryRows || []));
             if (groups.length === 0) {
                 container.innerHTML = `<div style="padding:18px; text-align:center; color:#64748b; font-weight:800; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">No weekly spend history has been logged yet. Weekly totals will appear as Firebase governor authorizations are created.</div>`;
                 return;
@@ -3758,7 +3830,7 @@
             const spendChannel = opts.spendChannel || 'Vended';
             const container = document.getElementById(opts.containerId || 'weekly-spend-table-summary-body');
             if (!container) return;
-            const groups = buildWeeklySpendTableSummaryGroups(globalWeeklySpendHistoryRows || [], spendChannel);
+            const groups = buildWeeklySpendTableSummaryGroups(filterGardaSpendRows(globalWeeklySpendHistoryRows || []), spendChannel);
             if (groups.length === 0) {
                 container.innerHTML = `<div style="padding:18px; text-align:center; color:#64748b; font-weight:800; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">No ${escapeHtml(opts.emptyLabel || 'weekly table summary')} is available yet. Weekly totals will appear once Firebase governor authorizations are loaded.</div>`;
                 return;
@@ -3795,7 +3867,7 @@
         }
 
         function buildWeeklySpendTableSummaryExportRows(rows, spendChannel = 'Vended') {
-            const groups = buildWeeklySpendTableSummaryGroups(rows || [], spendChannel);
+            const groups = buildWeeklySpendTableSummaryGroups(filterGardaSpendRows(rows || []), spendChannel);
             const out = [];
             const spendColumn = spendChannel === 'Dedicated' ? 'Dedicated Spend' : 'Vended Spend';
             groups.forEach(group => {
@@ -4347,6 +4419,7 @@
 
             function stampSpendAuthorization({ safeRo, roNum, unitNo, branch, subregion, region, owner, previousStatus, previousNormalizedStatus, currentStatus, currentNormalizedStatus, spend, spendStatus, spendSource, roDetailStatus, source, countType, inferredOpenedAt, inferredClosedAt }) {
                 if (!safeRo || !roNum) return;
+                if (!isGardaSpendRecord({ safeRo, roNumber: roNum, roNum, branch, customerLocation: branch, subregion, region, owner })) return;
                 const authUpdatePath = `spendGovernor/authorizations/${weekKey}/${safeRo}`;
                 if (updates[authUpdatePath]) return;
                 // Block true duplicates, but allow a repair if countIndex exists without any saved authorization record.
@@ -4564,6 +4637,7 @@
                 if (countIndex[safeRo] || existingAuthorizations[safeRo]) return;
 
                 const fin = roDetailFinancials[roNum] || {};
+                if (!isGardaSpendRecord({ roNumber: roNum, roNum, trueCustomer: fin.customer || '', customerLocation: fin.customerLocation || '', branch: fin.customerLocation || fin.shop || '', shop: fin.shop || '' })) return;
                 const currentStatus = String(fin.status || '').trim();
                 const currentNorm = normalizeSpendStatus(currentStatus);
                 if (currentNorm !== 'WIP' && currentNorm !== 'CLOSED') return;
@@ -4702,6 +4776,7 @@
                 Object.keys(weekAuths).forEach(safeRo => {
                     const auth = weekAuths[safeRo] || {};
                     const roNum = String(auth.roNumber || '').toUpperCase().trim();
+                    if (!isGardaSpendRecord(Object.assign({}, auth, { safeRo, roNumber: roNum, weekKey: authWeekKey }))) return;
                     if (!roNum) return;
 
                     const spendInfo = getRoSpendInfo(roNum);
@@ -4776,6 +4851,7 @@
             let branchAuthorized = {};
 
             Object.values(weeklyAuthorizations).forEach(auth => {
+                if (!isGardaSpendRecord(auth)) return;
                 const spend = Number(auth.spend || 0);
                 weeklyAuthorizedTotal += spend;
 
@@ -7136,6 +7212,7 @@
 
             for (let roNum in orderFin) {
                 let order = orderFin[roNum];
+                if (!isGardaSpendRecord({ roNumber: roNum, roNum, trueCustomer: order.customer || '', customerLocation: order.customerLocation || '', branch: order.customerLocation || order.shop || '', shop: order.shop || '' })) continue;
                 
                 let bCode = normalizeShopIdForSpend(order.shop) || extractGardaCode(order.shop) || normalizeBranchStr(order.shop);
                 if (!bCode) continue;
@@ -7639,7 +7716,7 @@
                 <div style="background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 15px; border-left: 5px solid ${budgetColor}; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
-                            <div style="font-size: 12px; color: #888; font-weight: 800; text-transform: uppercase;">Weekly Spend Governor Cap</div>
+                            <div style="font-size: 12px; color: #888; font-weight: 800; text-transform: uppercase;">Weekly Spend Governor Cap · Garda Only</div>
                             <div style="font-size: 24px; font-weight: 800; color: #333;">Captured Toward Cap: $${authorizedTotal.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
                         </div>
                         <div style="text-align: right;">
@@ -7655,7 +7732,7 @@
                         <span>${pctUtilized.toFixed(1)}% actual utilized</span>
                         <span>Forecast week ending: $${projectedWeekEnd.toLocaleString('en-US', {minimumFractionDigits:2})} (${pctProjected.toFixed(1)}% of cap)</span>
                     </div>
-                    <div style="font-size: 11px; color: #64748b; font-weight: 700; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; padding:8px 10px;">Green = actual current-week captured spend. Light green = projected week-end forecast based on current run rate. Gray = remaining capacity beyond the forecast. The hard weekly cap is $${WEEKLY_WIP_AUTH_CAP.toLocaleString('en-US')}.</div>
+                    <div style="font-size: 11px; color: #64748b; font-weight: 700; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; padding:8px 10px;">Garda-only reporting: non-Garda customer spend is excluded from the cap, branch cards, weekly history, status change log, and weekly table summaries. Green = actual current-week captured spend. Light green = projected week-end forecast based on current run rate. Gray = remaining capacity beyond the forecast. The hard weekly cap is $${WEEKLY_WIP_AUTH_CAP.toLocaleString('en-US')}.</div>
                     ${manualLockHtml}
                     ${unlimitedSpendHtml}
                     <div style="font-size: 12px; color: ${pendingSpendCount > 0 ? '#d9534f' : '#64748b'}; font-weight: 700; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px 10px;">${spendAuditText}</div>
@@ -7672,6 +7749,7 @@
             for (let reg of Object.keys(summaryTree).sort()) {
                 for (let sub of Object.keys(summaryTree[reg].subs).sort()) {
                     for (let bra of Object.keys(summaryTree[reg].subs[sub].branches).sort()) {
+                        if (!isGardaSpendRecord({ branch: bra, customerLocation: bra })) continue;
                         let bData = summaryTree[reg].subs[sub].branches[bra];
                         let authorized = bData.authorizedRev !== undefined ? bData.authorizedRev : (bData.wipRev || 0);
                         branchFinData.push({
