@@ -2383,40 +2383,56 @@
             const fin = window.globalOrderFin && roNumber ? window.globalOrderFin[roNumber] : null;
             const roContext = (typeof findProcessedRoForWeeklySpend === 'function') ? findProcessedRoForWeeklySpend(row) : null;
 
-            const trueCustomerSignals = [
+            const explicitCustomerSignals = [
+                row.custKey,
+                row.preBillingCustomer,
                 row.trueCustomer,
                 row.customerName,
                 row.customerAccount,
                 row.accountCustomer,
                 row.billingCustomer,
+                row.roDetailCustomer,
+                row.customer,
+                roContext && roContext.custKey,
+                roContext && roContext.preBillingCustomer,
+                roContext && roContext.trueCustomer,
+                roContext && roContext.customerName,
+                roContext && roContext.customer,
                 fin && fin.customer
             ].filter(v => String(v || '').trim());
 
-            if (trueCustomerSignals.length) {
-                if (trueCustomerSignals.some(hasGardaTextSignal)) return true;
-                if (trueCustomerSignals.some(hasKnownNonGardaCustomerSignal)) return false;
-                return false;
-            }
+            if (explicitCustomerSignals.some(hasGardaTextSignal)) return true;
+            if (explicitCustomerSignals.some(v => String(v || '').toUpperCase().trim() === 'GARDA')) return true;
+            if (explicitCustomerSignals.length && explicitCustomerSignals.some(hasKnownNonGardaCustomerSignal)) return false;
 
             const locationSignals = [
-                row.customer,
+                row.rawCustomerLocation,
                 row.customerLocation,
                 row.branch,
                 row.shop,
                 row.region,
                 row.subregion,
-                fin && fin.customerLocation,
-                fin && fin.shop,
-                roContext && roContext.customer,
+                row.financialShop,
+                roContext && roContext.rawCustomerLocation,
+                roContext && roContext.customerLocation,
                 roContext && roContext.branch,
-                roContext && roContext.customerLocation
+                roContext && roContext.shop,
+                roContext && roContext.region,
+                roContext && roContext.subregion,
+                fin && fin.customerLocation,
+                fin && fin.shop
             ].filter(v => String(v || '').trim());
 
             if (locationSignals.some(hasGardaTextSignal)) return true;
-            if (locationSignals.some(hasKnownNonGardaCustomerSignal)) return false;
+
+            // Garda spend rows often carry the 3-2 branch code instead of the literal customer name.
+            // Only use this after explicit customer checks so known non-Garda customers cannot leak in.
+            if (locationSignals.some(v => !!extractGardaCode(v))) return true;
 
             if (String(row.custKey || '').toUpperCase().trim() === 'GARDA') return true;
             if (roContext && String(roContext.custKey || '').toUpperCase().trim() === 'GARDA') return true;
+
+            if (locationSignals.some(hasKnownNonGardaCustomerSignal)) return false;
 
             return false;
         }
@@ -2934,6 +2950,13 @@
         }
 
         function syncGlobalAppFinFromWeeklyHistoryRows() {
+            const currentFin = window.globalAppFin || {};
+            const currentAuthorized = currentFin.authorizedRev !== undefined ? Number(currentFin.authorizedRev || 0) : Number(currentFin.wipRev || 0);
+
+            // Do not let Weekly History override the live current-week authorization total.
+            // Weekly History is a display/audit view; the cap should match the current Firebase authorization rollup.
+            if (currentAuthorized > 0) return;
+
             const summary = getCurrentWeekHistoryGovernorSummary();
             if (!summary || summary.totalSpend <= 0) return;
             window.globalAppFin = window.globalAppFin || {};
@@ -2946,12 +2969,10 @@
             window.globalAppFin.remainingToReleaseThreshold = Math.max(0, WEEKLY_WIP_RELEASE_THRESHOLD - summary.totalSpend);
             window.globalAppFin.weekKey = summary.weekKey;
             window.globalAppFin.currentWeekHistoryVroCount = summary.vroCount;
-            window.globalAppFin.source = window.globalAppFin.source || 'firebase-weekly-history-sync';
+            window.globalAppFin.source = window.globalAppFin.source || 'firebase-weekly-history-fallback';
         }
 
         function getSpendGovernorAuthorizedTotal() {
-            const historySummary = getCurrentWeekHistoryGovernorSummary();
-            if (historySummary && historySummary.totalSpend > 0) return Number(historySummary.totalSpend || 0);
             const fin = window.globalAppFin || {};
             const val = fin.authorizedRev !== undefined ? fin.authorizedRev : fin.wipRev;
             return Number(val || 0);
