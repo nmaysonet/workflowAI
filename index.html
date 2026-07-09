@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>workFLOW+ Weekly Spend Matrix + AI</title>
+    <title>OSC+ Weekly Spend Matrix + AI</title>
     <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -55,6 +55,12 @@
         .truck-body { animation: bump 0.4s ease-in-out infinite; }
         .wheel { animation: spin 0.8s linear infinite; }
         .road-line { animation: moveRoad 0.4s linear infinite; }
+
+        /* OSC+ static branding: stop all wheel/truck/logo motion. */
+        .logo-spin, .truck-body, .wheel, .road-line {
+            animation: none !important;
+            transform: none !important;
+        }
 
         .main-content { flex-grow: 1; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
         .top-bar { background: #fff; padding: 12px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10; flex-shrink: 0; position: relative; min-height: 86px; }
@@ -473,7 +479,7 @@
                     <line x1="50" y1="50" x2="50" y2="15" /><line x1="50" y1="50" x2="83" y2="39" /><line x1="50" y1="50" x2="70" y2="78" /><line x1="50" y1="50" x2="30" y2="78" /><line x1="50" y1="50" x2="17" y2="39" />
                 </g>
             </svg>
-            <h2>workFLOW+ Login</h2>
+            <h2>OSC+ Login</h2>
             <div id="login-error" class="login-error">Incorrect Password</div>
             <input type="password" id="login-pass" placeholder="Enter Password" onkeypress="if(event.key === 'Enter') checkLogin()">
             <button onclick="checkLogin()">ENTER</button>
@@ -493,7 +499,7 @@
                     <line x1="50" y1="50" x2="17" y2="39" />
                 </g>
             </svg>
-            <span class="logo-text">workFLOW</span>
+            <span class="logo-text">OSC</span>
             <span class="logo-plus">+</span>
         </div>
         <div class="menu-item active" id="menu-spend" onclick="navigate('spend-view', this)">Weekly Spend Matrix</div>
@@ -552,10 +558,10 @@
         </div>
 
         <div id="home-view" class="view-section">
-            <h1 class="home-title">Welcome to workFLOW +</h1>
+            <h1 class="home-title">Welcome to OSC+</h1>
             <div class="upload-container" id="upload-box">
                 <h3>Loading Dashboard Data</h3>
-                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">Attempting to fetch <b>master_workFLOW.xlsx</b> from Firebase Storage...</p>
+                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">Attempting to fetch the OSC+ dashboard workbook from Firebase Storage...</p>
                 <div id="upload-status" style="font-size: 15px; font-weight: bold; color: #888;">Initializing...</div>
                 <div id="manual-upload-section" style="display: none; margin-top: 25px; padding-top: 20px; border-top: 1px dashed #ccc;">
                     <p style="font-size: 13px; color: #888; margin-bottom: 10px;">Fallback: File not found. Upload manually below.</p>
@@ -1252,7 +1258,7 @@
 
                 if (!usefulRawAOA.length && !resourceRawAOA.length && !oosRawAOA.length && !vroRaw.length) {
                     throw new Error(
-                        'Workbook loaded, but no expected sheets were recognized. Check tab names in master_workFLOW.xlsx.'
+                        'Workbook loaded, but no expected sheets were recognized. Check tab names in the OSC+ dashboard workbook.'
                     );
                 }
 
@@ -4352,7 +4358,7 @@
 
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Spend Status Change Log');
-            XLSX.writeFile(workbook, `workFLOW_spend_status_change_log_${getLocalDateKey(new Date())}.xlsx`);
+            XLSX.writeFile(workbook, `OSC_spend_status_change_log_${getLocalDateKey(new Date())}.xlsx`);
         }
 
         function applySpendGovernorFinancials(branchFin) {
@@ -5202,7 +5208,7 @@
             
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Filtered ROs");
-            XLSX.writeFile(workbook, `workflow_export_${String(currentOwnerView).replace(/\s+/g, '_')}_${currentFilter.toLowerCase()}.xlsx`);
+            XLSX.writeFile(workbook, `OSC_export_${String(currentOwnerView).replace(/\s+/g, '_')}_${currentFilter.toLowerCase()}.xlsx`);
         }
 
         function exportSearchToExcel() {
@@ -5232,7 +5238,7 @@
 
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Search Results");
-            XLSX.writeFile(workbook, `workflow_search_${searchTerm}.xlsx`);
+            XLSX.writeFile(workbook, `OSC_search_${searchTerm}.xlsx`);
         }
 
         window.exportSummaryToExcel = function() {
@@ -5543,22 +5549,23 @@
             const codeCompact = rawCode.replace(/\s+/g, '');
             const codeDigits = rawCode.replace(/[^0-9]/g, '');
             const normalizedText = normalizeRepairEvidenceText(`${componentDescription || ''} ${extraText || ''}`);
-            const codeMatches =
-                codeCompact === '999-014' ||
-                codeCompact === '999014' ||
-                codeDigits === '999014';
-            const accidentPhrases = [
-                'ACCIDENT', 'ACCIDENT DAMAGE', 'ACC DAM', 'COLLISION', 'CRASH', 'STRUCK', 'HIT', 'IMPACT',
-                'BODY DAMAGE', 'PHYSICAL DAMAGE', 'DAMAGE FROM COLLISION', 'INVOLVED IN COLLISION',
-                'BACKED INTO', 'SCRAPED', 'DEER STRIKE', 'WINDSHIELD IMPACT', 'MIRROR DAMAGE',
-                'BUMPER DAMAGE', 'HOOD DAMAGE', 'DOOR DAMAGE', 'PANEL DAMAGE'
+            const hasAccidentCode = codeCompact === '999-014' || codeCompact === '999014' || codeDigits === '999014';
+
+            // V4 correction: Accident Damage requires external-force / impact / collision causality.
+            // Do not classify as Accident Damage from generic words such as damage, damaged, windshield, headlamp, mirror,
+            // bumper, body, panel, failed, broken, worn, leak, or a failed component unless the cause is impact/collision.
+            const hardAccidentPhrases = [
+                'ACCIDENT', 'ACCIDENT DAMAGE', 'ACC DAM', 'COLLISION', 'CRASH', 'UNIT INVOLVED IN COLLISION',
+                'DAMAGE FROM COLLISION', 'REPAIR DAMAGE FROM COLLISION', 'LEGAL HOLD', 'INSURANCE CLAIM',
+                'HIT BY', 'HIT A', 'HIT THE', 'DRIVER HIT', 'STRUCK', 'STRUCK BY', 'BACKED INTO', 'RAN INTO',
+                'SIDE SWIPED', 'SIDESWIPED', 'SCRAPED', 'DEER STRIKE', 'HIT DEER', 'CURB IMPACT', 'HIT CURB',
+                'DROVE OVER CURB', 'ROAD DEBRIS', 'ROCK IMPACT', 'ROCK CHIP', 'WINDSHIELD IMPACT',
+                'MIRROR IMPACT', 'BUMPER IMPACT', 'BODY DAMAGE FROM', 'IMPACT DAMAGE', 'PHYSICAL DAMAGE FROM'
             ];
-            const hasAccidentText = accidentPhrases.some(p => normalizedText.includes(normalizeRepairEvidenceText(p)));
-            const hasDamage3Cs = normalizedText.includes('COMPLAINT') &&
-                normalizedText.includes('CAUSE') &&
-                normalizedText.includes('CORRECTION') &&
-                normalizedText.includes('DAMAGE');
-            return (codeMatches && (hasAccidentText || normalizedText.includes('DAMAGE'))) || hasAccidentText || hasDamage3Cs;
+            const hasHardAccidentText = hardAccidentPhrases.some(p => normalizedText.includes(normalizeRepairEvidenceText(p)));
+            const hasImpactCausality = /\b(HIT|STRUCK|IMPACT|COLLISION|ACCIDENT|BACKED INTO|DEER|CURB|ROCK|ROAD DEBRIS|SCRAPED|SIDESWIPE|SIDE SWIPE)\b/.test(normalizedText);
+            const damageWords = /\b(BODY DAMAGE|BUMPER DAMAGE|HOOD DAMAGE|DOOR DAMAGE|PANEL DAMAGE|MIRROR DAMAGE|GLASS DAMAGE|WINDSHIELD DAMAGE|PHYSICAL DAMAGE)\b/.test(normalizedText);
+            return hasHardAccidentText || (hasAccidentCode && (hasImpactCausality || damageWords));
         }
 
         function normalizeRepairEvidenceText(value) {
@@ -5961,105 +5968,145 @@
 
         function determineRecommendedRepairClassFromEvidence(primaryRepClass, combinedText, spend, tireQty, hits) {
             const current = String(primaryRepClass || '').toUpperCase();
-            const text = String(combinedText || '').toUpperCase();
-            const hasAny = arr => arr.some(x => text.includes(String(x).toUpperCase()));
-            const isAlready = needle => current.includes(needle);
+            const normalized = normalizeRepairEvidenceText(combinedText || '');
+            const hasPhrase = arr => (arr || []).some(x => normalized.includes(normalizeRepairEvidenceText(x)));
+            const isAlready = needle => current.includes(String(needle || '').toUpperCase());
 
-            // GARDA ERSA is emergency road-call support. Once an RO is already classed as GARDA ERSA,
-            // it takes precedence over driver abuse, accident damage, towing, DEF, or any other evidence.
+            // Already-valid GARDA ERSA is preserved. This is a no-transfer condition, not a recommendation to move it back to ERSA.
             if (isGardaErsaRepairClass(primaryRepClass)) return null;
-
             if (isAlready('MERCHANT')) return null;
-            if (hits.specialProjectCameraSystem && !isAlready('SPECIAL')) {
-                return { recommendedClass: 'SPECIAL PROJECT', reason: 'Component code 036-014 with Driver Risk Management Camera System in Component Description requires SPECIAL PROJECT.' };
+
+            const context = hits || {};
+            const complexity = context.orderComplexity || {};
+            const queueNorm = normalizeQueueNameForRepairClass(context.queueSource || '');
+            const repService = String(context.repService || getBillingServiceFromRepClass(primaryRepClass) || '').toUpperCase();
+            const isStandardRepairContext = !!context.isStandardRepairContext;
+            const isVendedRepairContext = !!context.isVendedRepairContext || queueNorm.includes('VENDED') || queueNorm.includes('ERS') || repService.includes('ERS');
+            const hasPartsEvidence = !!(complexity.partLineCount || (complexity.partKeywordHits && complexity.partKeywordHits.length));
+            const hasComplexPartsRepair = !!(complexity.hasComplexPartsRepair || complexity.hasMultiSectionPartsSignal || complexity.hasMajorComponentSignal);
+
+            const routineRepairPhrases = [
+                'REPAIR', 'REPAIRED', 'REPLACE', 'REPLACED', 'REPLACEMENT', 'R R', 'REMOVE AND REPLACE',
+                'INSTALL', 'INSTALLED', 'FAILED', 'FAILURE', 'BAD', 'BROKEN', 'WORN', 'LEAK', 'LEAKING',
+                'NO START', 'NOT CRANKING', 'NOT WORKING', 'INOPERATIVE', 'INOP', 'A/C NOT FUNCTIONING',
+                'AC NOT FUNCTIONING', 'A/C NOT WORKING', 'AC NOT WORKING', 'NO A/C', 'NO AC', 'HOSE', 'BELT',
+                'PUMP', 'SENSOR', 'WIRE', 'WIRING', 'HARNESS', 'BATTERY', 'ALTERNATOR', 'STARTER', 'COMPRESSOR'
+            ];
+            const hasRoutineRepairEvidence = hasPhrase(routineRepairPhrases) || hasPartsEvidence;
+
+            // 1) Hard project precedence.
+            if (context.specialProjectCameraSystem && !isAlready('SPECIAL')) {
+                return { recommendedClass: 'SPECIAL PROJECT', reason: 'Driver Risk Management Camera System / camera-install component evidence supports SPECIAL PROJECT.' };
             }
-            const driverAbuseHits = Array.isArray(hits.driverAbuseHits) && hits.driverAbuseHits.length
-                ? hits.driverAbuseHits
-                : billingContainsAny(text, ['DRIVER ABUSE','DRIVER CAUSED','OPERATOR ERROR','ROAD HAZARD','SIDEWALL','LOCKOUT','LOST KEY','MISFUEL','DEF IN FUEL','FUEL CONTAMINATION','OUT OF FUEL','IGNORED WARNING','IGNORED REGEN','PARKED REGEN','REGEN','DERATE','DERATED','DE-RATE','DE RATE']);
-            const hasDerateSignal = driverAbuseHits.some(hit => /DERAT|DE-RATE|DE RATE/i.test(String(hit || '')));
-            if (driverAbuseHits.length && !isAlready('ABUSE')) {
-                return {
-                    recommendedClass: 'DRIVER ABUSE',
-                    reason: hasDerateSignal
-                        ? 'Notes/complaint/3Cs indicate derate/derated condition. Derate is treated as a strong driver-abuse signal unless stronger precedence applies, because it is typically caused by ignored warnings/regen issues.'
-                        : `Driver-abuse signal(s) from notes/3Cs/line detail (${driverAbuseHits.slice(0, 4).join(', ')}) support DRIVER ABUSE review.`
-                };
+            if (hasPhrase(['SAMSARA INSTALL', 'CAMERA INSTALL', 'TELEMATICS INSTALL', 'DRIVER RISK MANAGEMENT CAMERA', 'RETROFIT', 'UPFIT']) && !isAlready('SPECIAL')) {
+                return { recommendedClass: 'SPECIAL PROJ', reason: 'Project/install language supports SPECIAL PROJ.' };
             }
-            const accidentDamageHits = Array.isArray(hits.accidentDamageHits) && hits.accidentDamageHits.length
-                ? hits.accidentDamageHits
-                : billingContainsAny(text, ['ACCIDENT','ACCIDENT DAMAGE','ACC DAM','COLLISION','CRASH','STRUCK','IMPACT','HIT ',' HIT','BODY DAMAGE','PHYSICAL DAMAGE','DAMAGE FROM COLLISION','INVOLVED IN COLLISION','BACKED INTO','SCRAPED','DEER','BUMPER DAMAGE','HOOD DAMAGE','DOOR DAMAGE','PANEL DAMAGE','MIRROR DAMAGE','WINDSHIELD IMPACT']);
-            const hasAccidentEvidence = !!hits.accidentDamageEvidence || accidentDamageHits.length > 0;
+
+            // 2) Accident Damage: strict external-force standard only.
+            const accidentDamageHits = Array.isArray(context.accidentDamageHits) && context.accidentDamageHits.length ? context.accidentDamageHits : [];
+            const hasAccidentEvidence = !!context.accidentDamageEvidence || isAccidentDamageRepairEvidence('', '', normalized);
             if (hasAccidentEvidence && !isAlready('ACC')) {
                 return {
                     recommendedClass: 'ACCIDENT DAMAGE',
-                    reason: `Accident/physical-damage evidence from notes/3Cs/component sections (${accidentDamageHits.slice(0, 5).join(', ') || '999-014 Accident / body damage evidence'}) supports ACCIDENT DAMAGE. Accident evidence overrides generic diagnostics or engine/transmission wording when there is no clear deferred-maintenance repair evidence.`
+                    reason: `External-force accident/collision/impact evidence supports ACCIDENT DAMAGE (${accidentDamageHits.slice(0, 5).join(', ') || 'collision/impact/body-damage causality found'}). Generic damaged/failed parts are not used as accident evidence.`
                 };
             }
-            const hasMajorEvidence = !!(hits.majorHits && hits.majorHits.length);
-            const complexity = hits.orderComplexity || {};
-            const hasComplexPartsRepair = !!(complexity.hasComplexPartsRepair || complexity.hasMultiSectionPartsSignal || complexity.hasMajorComponentSignal);
 
-            // Do not use dollar value as a shortcut. Classify major/non-routine repairs from notes, 3Cs, component descriptions,
-            // line detail, parts lines, parts pricing text, and multi-section VMRS/component signals. If signals are not clear, leave current class alone.
-            if ((hasMajorEvidence || hasComplexPartsRepair) && isAlready('DEF')) {
-                return null;
-            }
-            if ((hasMajorEvidence || hasComplexPartsRepair) && !isAlready('DEF') && !isAlready('SPECIAL') && !isAlready('ABUSE') && !isAlready('ACC') && !isAlready('TOW') && !isAlready('ERSA')) {
-                const complexityReason = complexity.reason ? `; ${complexity.reason}` : '';
-                return { recommendedClass: 'DEF MAINT', reason: `Major/non-routine repair signal(s) from notes/3Cs/parts (${(hits.majorHits || []).slice(0,4).join(', ') || 'multi-section parts evidence'}${complexityReason}) support DEF MAINT. Dollar value is not used as the trigger.` };
-            }
-            if (hits.brakeDiagnosticsScheduled && hasComplexPartsRepair && !isAlready('DEF')) {
-                return { recommendedClass: 'DEF MAINT', reason: `Brake diagnostics has complex/multi-section parts evidence (${complexity.reason || 'multiple parts/sections'}), so this should be DEF MAINT rather than simple Scheduled.` };
-            }
-            if (hits.brakeDiagnosticsScheduled && !isAlready('SCHEDULED')) {
-                return { recommendedClass: 'SCHEDULED', reason: 'Component code 013-013-999 with BRAKE DIAGNOSTICS is a simple repair signal and should be SCHEDULED when no major/complex brake evidence exists.' };
+            // 3) Driver Abuse: avoidable driver behavior and DPF/aftertreatment/regen/derate evidence take precedence over DEF MAINT.
+            const driverAbuseHits = Array.isArray(context.driverAbuseHits) && context.driverAbuseHits.length
+                ? context.driverAbuseHits
+                : billingContainsAny(normalized, [
+                    'DRIVER ABUSE','DRIVER CAUSED','OPERATOR ERROR','ROAD HAZARD','SIDEWALL','RUN FLAT','RAN FLAT',
+                    'LOCKOUT','LOCK OUT','LOST KEY','LOST FOB','KEY FOB','MISFUEL','DEF IN FUEL','FUEL CONTAMINATION',
+                    'OUT OF FUEL','RAN OUT OF FUEL','IGNORED WARNING','IGNORED REGEN','PARKED REGEN','FORCED REGEN',
+                    'REGEN','DERATE','DERATED','DE-RATE','DE RATE','LIMP MODE','HIGH SOOT','SOOT LEVEL',
+                    'DPF','DIESEL PARTICULATE FILTER','AFTERTREATMENT','SCR','DOC','NOX SENSOR'
+                ]);
+            const hasDerateOrAftertreatmentSignal = driverAbuseHits.some(hit => /DERAT|DE-RATE|DE RATE|REGEN|DPF|AFTERTREATMENT|HIGH SOOT|SOOT|SCR|DOC|NOX/i.test(String(hit || '')));
+            if (driverAbuseHits.length && !isAlready('ABUSE')) {
+                return {
+                    recommendedClass: 'DRIVER ABUSE',
+                    reason: hasDerateOrAftertreatmentSignal
+                        ? `DPF/aftertreatment/regen/derate/high-soot evidence (${driverAbuseHits.slice(0, 5).join(', ')}) supports DRIVER ABUSE when reviewed with notes/comments/parts context.`
+                        : `Driver-caused / avoidable operating evidence (${driverAbuseHits.slice(0, 5).join(', ')}) supports DRIVER ABUSE.`
+                };
             }
 
-            if (hits.hvacDiagnostics && hits.hvacDiagnostics.recommendedClass) {
-                const hvacClass = String(hits.hvacDiagnostics.recommendedClass || '').toUpperCase();
+            // 4) ERSA: only Vended/roadside emergency context. STANDARD repairs cannot become ERSA.
+            // Jump starts alone do not qualify; roadside/breakdown/disabled/emergency context must be present.
+            const roadsideEmergencyPhrases = [
+                'ROADSIDE REPAIR', 'ROADSIDE ASSISTANCE', 'ROAD SIDE REPAIR', 'ROAD CALL', 'BREAKDOWN SUPPORT',
+                'BREAKDOWN', 'DISABLED UNIT', 'UNIT DISABLED', 'DRIVER STRANDED', 'UNIT DOWN ROADSIDE',
+                'EMERGENCY TOW', 'EMERGENCY ROAD', 'ROAD SERVICE', 'MOBILE RESCUE', 'ROADSIDE TOW', 'TOWED FROM ROADSIDE'
+            ];
+            const hasRoadsideEmergencyEvidence = hasPhrase(roadsideEmergencyPhrases) ||
+                (hasPhrase(['JUMP START', 'NO START']) && hasPhrase(['ROADSIDE', 'ROAD SIDE', 'ROAD CALL', 'BREAKDOWN', 'DISABLED', 'EMERGENCY']));
+            if (hasRoadsideEmergencyEvidence && !isStandardRepairContext && isVendedRepairContext && !(isAlready('ERSA') || current.includes('ROAD CALL'))) {
+                return { recommendedClass: 'GARDA ERSA', reason: 'Vended roadside emergency / breakdown support evidence supports GARDA_ERSA. Standard repairs and shop jump-starts are not reclassified to ERSA.' };
+            }
+
+            // 5) TOWING: use only when billed event is tow/transport service itself and there is no better underlying repair.
+            const towServicePhrases = [
+                'TOWING SERVICE', 'TOW SERVICE', 'WRECKER SERVICE', 'ROLLBACK', 'WINCH OUT', 'WINCHING', 'RECOVERY',
+                'TRANSPORT OF VEHICLE', 'TRANSPORT VEHICLE', 'TRANSPORT TO DEALER', 'TRANSPORT TO SHOP',
+                'TOW TO SHOP', 'TOWED TO SHOP', 'TOW TO DEALER', 'TOWED TO DEALER', 'SHOP TO SHOP',
+                'MILEAGE FEE', 'TOW MILEAGE', 'HOOK FEE', 'FUEL SURCHARGE'
+            ];
+            const hasTowServiceEvidence = hasPhrase(towServicePhrases);
+            if (hasTowServiceEvidence && !hasRoadsideEmergencyEvidence && !hasRoutineRepairEvidence && !(isAlready('TOW') || isAlready('ERSA'))) {
+                return { recommendedClass: 'TOWING', reason: 'Billed evidence appears to be non-emergency tow/transport service only, with no stronger underlying repair parts/labor evidence.' };
+            }
+
+            // 6) Explicit PM / inspection only. PM wording does not override actual corrective repair parts/labor.
+            if (context.hvacDiagnostics && context.hvacDiagnostics.recommendedClass) {
+                const hvacClass = String(context.hvacDiagnostics.recommendedClass || '').toUpperCase();
                 if (hvacClass === 'SCHEDULED' && !isAlready('SCHEDULED')) {
-                    return { recommendedClass: 'SCHEDULED', reason: hits.hvacDiagnostics.reason || 'HVAC diagnostics with parts evidence should be SCHEDULED.' };
+                    return { recommendedClass: 'SCHEDULED', reason: context.hvacDiagnostics.reason || 'A/C/HVAC malfunction or repair evidence supports SCHEDULED.' };
                 }
                 if (hvacClass === 'OSC PM' && !(isAlready('OSC PM') || current === 'PM')) {
-                    return { recommendedClass: 'OSC PM', reason: hits.hvacDiagnostics.reason || 'HVAC diagnostics has explicit PM/inspection evidence and no repair/parts evidence, supporting OSC PM.' };
+                    return { recommendedClass: 'OSC PM', reason: context.hvacDiagnostics.reason || 'Explicit A/C/HVAC inspection-only evidence supports OSC PM.' };
                 }
             }
-            if (hits.aggressiveNotesReview && hits.aggressiveNotesReview.recommendedClass) {
-                const notesClass = String(hits.aggressiveNotesReview.recommendedClass || '').toUpperCase();
+            if (context.aggressiveNotesReview && context.aggressiveNotesReview.recommendedClass) {
+                const notesClass = String(context.aggressiveNotesReview.recommendedClass || '').toUpperCase();
                 if (notesClass === 'OSC PM' && !(isAlready('OSC PM') || current === 'PM')) {
-                    return { recommendedClass: 'OSC PM', reason: hits.aggressiveNotesReview.reason || 'Notes indicate PM/inspection-only work and should override a bad VMRS or repair-class selection.' };
-                }
-                if (notesClass === 'DEF MAINT' && !isAlready('DEF')) {
-                    return { recommendedClass: 'DEF MAINT', reason: hits.aggressiveNotesReview.reason || 'Notes/3Cs/parts indicate major repair work and should be DEF MAINT.' };
+                    return { recommendedClass: 'OSC PM', reason: context.aggressiveNotesReview.reason || 'Explicit PM/inspection-only evidence supports OSC PM.' };
                 }
                 if (notesClass === 'SCHEDULED' && !isAlready('SCHEDULED')) {
-                    return { recommendedClass: 'SCHEDULED', reason: hits.aggressiveNotesReview.reason || 'Notes/3Cs/parts indicate actual routine repair work and should be SCHEDULED.' };
+                    return { recommendedClass: 'SCHEDULED', reason: context.aggressiveNotesReview.reason || 'Full repair story indicates routine corrective repair, so SCHEDULED is more accurate.' };
+                }
+                if (notesClass === 'DEF MAINT' && !isAlready('DEF') && !hasRoutineRepairEvidence) {
+                    return { recommendedClass: 'DEF MAINT', reason: context.aggressiveNotesReview.reason || 'Major/complex repair evidence supports DEF MAINT.' };
                 }
             }
+
+            // 7) Brake / tire / major maintenance.
             if (tireQty >= 4 && !isAlready('DEF')) {
-                return { recommendedClass: 'DEF MAINT', reason: `Tire quantity across billed lines is ${tireQty}; 4+ tires should be reviewed as DEF MAINT.` };
+                return { recommendedClass: 'DEF MAINT', reason: `Tire quantity across billed lines is ${tireQty}; 4+ tires support DEF MAINT unless accident/abuse/ERSA evidence is stronger.` };
             }
-            if (hasAny(['CUSTOMER DIRECT','CUST DIRECT','CUSTOMER USED','BRANCH SENT','NOT DISPATCHED BY AMERIT','VENDOR WAS NOT DISPATCHED','AMERIT DID NOT DISPATCH']) && !(isAlready('CUST') || isAlready('CUSTOMER DIRECT'))) {
-                return { recommendedClass: 'CUST DIRECT', reason: 'Notes indicate the customer/branch used or directed the vendor without Amerit dispatch/coordination, supporting CUST DIRECT review.' };
+            if (context.brakeDiagnosticsScheduled && hasComplexPartsRepair && !isAlready('DEF')) {
+                return { recommendedClass: 'DEF MAINT', reason: `Brake diagnostics includes complex/multi-section brake parts evidence (${complexity.reason || 'multiple parts/sections'}), supporting DEF MAINT.` };
             }
-            if (hasAny(['ACCIDENT','COLLISION','CRASH','STRUCK','IMPACT','DEER','BODY DAMAGE','VANDAL','WINDSHIELD IMPACT']) && !isAlready('ACC')) {
-                return { recommendedClass: 'ACCIDENT DAMAGE', reason: 'Accident/impact/physical damage language supports ACCIDENT DAMAGE review.' };
+            if (context.brakeDiagnosticsScheduled && !isAlready('SCHEDULED')) {
+                return { recommendedClass: 'SCHEDULED', reason: 'Brake diagnostics without complex overhaul evidence is routine corrective repair and should be SCHEDULED.' };
             }
-            if (hasAny(['DRIVER ABUSE','DRIVER CAUSED','OPERATOR ERROR','ROAD HAZARD','SIDEWALL','LOCKOUT','LOST KEY','MISFUEL','DEF IN FUEL','FUEL CONTAMINATION','OUT OF FUEL','IGNORED WARNING','IGNORED REGEN','PARKED REGEN','REGEN','DERATE','DERATED','DE-RATE','DE RATE']) && !isAlready('ABUSE')) {
-                return { recommendedClass: 'DRIVER ABUSE', reason: 'Driver-caused indicators, especially derate/regen/ignored-warning evidence, support DRIVER ABUSE review.' };
+
+            // 8) Customer-directed / merchant work.
+            if (hasPhrase(['CUSTOMER DIRECT','CUST DIRECT','CUSTOMER USED','BRANCH SENT','NOT DISPATCHED BY AMERIT','VENDOR WAS NOT DISPATCHED','AMERIT DID NOT DISPATCH']) && !(isAlready('CUST') || isAlready('CUSTOMER DIRECT') || isAlready('MERCHANT'))) {
+                return { recommendedClass: 'CUST DIRECT', reason: 'Customer/branch-directed vendor evidence supports CUST DIRECT review.' };
             }
-            if (hasAny(['SAMSARA','CAMERA INSTALL','TELEMATICS INSTALL','RETROFIT','UPFIT']) && !isAlready('SPECIAL')) {
-                return { recommendedClass: 'SPECIAL PROJ', reason: 'Project/install language supports SPECIAL PROJ review.' };
+
+            // 9) DEF MAINT only when the repair is major/complex/deferred and not better explained by SCHEDULED/PM/Accident/Abuse/ERSA/Tow.
+            const hasMajorEvidence = !!(context.majorHits && context.majorHits.length);
+            if ((hasMajorEvidence || hasComplexPartsRepair) && isAlready('DEF')) return null;
+            if ((hasMajorEvidence || hasComplexPartsRepair) && !isAlready('DEF') && !isAlready('SPECIAL') && !isAlready('ABUSE') && !isAlready('ACC') && !isAlready('TOW') && !isAlready('ERSA')) {
+                const complexityReason = complexity.reason ? `; ${complexity.reason}` : '';
+                return { recommendedClass: 'DEF MAINT', reason: `Major/complex/deferred maintenance evidence (${(context.majorHits || []).slice(0,4).join(', ') || 'multi-section parts evidence'}${complexityReason}) supports DEF MAINT.` };
             }
-            if (hasAny(['ROAD CALL','ROADSIDE','EMERGENCY','BREAKDOWN','NO START','UNIT DOWN','MOBILE RESCUE']) && !(isAlready('ERSA') || current.includes('ROAD CALL'))) {
-                return { recommendedClass: 'GARDA ERSA', reason: 'Roadside/emergency language supports GARDA ERSA review.' };
-            }
-            if (hasAny(['TOW','TOWED','TOWING','WRECKER','ROLLBACK','WINCH','RECOVERY']) && !(isAlready('TOW') || isAlready('ERSA'))) {
-                return { recommendedClass: 'TOWING', reason: 'Tow/wrecker/recovery language supports TOWING review unless this was emergency roadside.' };
-            }
-            const major = hits.majorHits && hits.majorHits.length;
-            if (major && !isAlready('DEF')) {
-                return { recommendedClass: 'DEF MAINT', reason: `Major repair evidence from notes/3Cs/parts (${(hits.majorHits || []).slice(0,4).join(', ')}) supports DEF MAINT review.` };
+
+            // 10) Default for actual repair evidence is SCHEDULED unless the current class is already an accepted excluded/PM class.
+            if (hasRoutineRepairEvidence && !isAlready('SCHEDULED') && !isAlready('OSC PM') && !isAlready('PM') && !isAlready('DEF') && !isAlready('ABUSE') && !isAlready('ACC') && !isAlready('TOW') && !isAlready('ERSA') && !isAlready('SPECIAL') && !isAlready('MERCHANT')) {
+                return { recommendedClass: 'SCHEDULED', reason: 'Full repair evidence shows routine corrective repair / normal wear-failure work, so SCHEDULED is the default class.' };
             }
             return null;
         }
@@ -6191,9 +6238,9 @@
             const weakPmKeywords = ['filter', 'oil', 'inspection', 'service', 'lube'];
             const ersKeywords = ['roadside', 'road call', 'no start', 'jump start', 'tow', 'towing', 'breakdown', 'disabled', 'emergency', 'unit down roadside', 'mobile rescue', 'tire blowout', 'locked out'];
             const majorRepairKeywords = ['engine', 'engine replacement', 'replace engine', 'transmission', 'transmission replacement', 'aftertreatment', 'dpf', 'diesel particulate filter', 'scr', 'doc', 'nox', 'emissions', 'regen', 'def system', 'turbo', 'injector', 'egr', 'egr cooler', 'radiator', 'coolant', 'powertrain', 'drivetrain', 'differential', 'rear end', 'axle', 'transfer case', 'overhaul', 'rebuild', 'failed', 'failure', 'derate', 'large brake overhaul', 'brake overhaul', 'front and rear brake'];
-            const excludableKeywords = ['accident', 'collision', 'driver abuse', 'misuse', 'vandalism', 'damage', 'deferred maintenance', 'deferred', 'engine replacement', 'transmission', 'aftertreatment', 'dpf', 'emissions', 'regen', 'def in fuel', 'fuel contamination', 'road hazard', 'sidewall', 'lockout', 'lost key', 'customer direct', 'cust direct', 'customer used', 'branch sent', 'not dispatched by amerit', 'samsara', 'camera install', 'retrofit', 'upfit', 'merchant'];
-            const driverAbuseKeywords = ['driver abuse', 'driver caused', 'operator error', 'road hazard', 'sidewall', 'lockout', 'lost key', 'misfuel', 'def in fuel', 'fuel contamination', 'out of fuel', 'ignored warning', 'ignored regen', 'parked regen', 'regen', 'derate', 'derated', 'de-rate', 'de rate'];
-            const accidentDamageKeywords = ['accident', 'accident damage', 'acc dam', 'collision', 'crash', 'struck', 'impact', 'hit ', ' hit', 'body damage', 'physical damage', 'damage from collision', 'involved in collision', 'backed into', 'scraped', 'deer strike', 'bumper damage', 'hood damage', 'door damage', 'panel damage', 'mirror damage', 'windshield impact'];
+            const excludableKeywords = ['accident', 'collision', 'driver abuse', 'misuse', 'vandalism', 'deferred maintenance', 'deferred', 'engine replacement', 'transmission', 'aftertreatment', 'dpf', 'emissions', 'regen', 'def in fuel', 'fuel contamination', 'road hazard', 'sidewall', 'lockout', 'lost key', 'customer direct', 'cust direct', 'customer used', 'branch sent', 'not dispatched by amerit', 'samsara', 'camera install', 'retrofit', 'upfit', 'merchant'];
+            const driverAbuseKeywords = ['driver abuse', 'driver caused', 'operator error', 'road hazard', 'sidewall', 'run flat', 'ran flat', 'lockout', 'lock out', 'lost key', 'lost fob', 'key fob', 'misfuel', 'def in fuel', 'fuel contamination', 'out of fuel', 'ran out of fuel', 'ignored warning', 'ignored regen', 'parked regen', 'forced regen', 'regen', 'derate', 'derated', 'de-rate', 'de rate', 'limp mode', 'high soot', 'soot level', 'dpf', 'diesel particulate filter', 'aftertreatment', 'scr', 'doc', 'nox sensor'];
+            const accidentDamageKeywords = ['accident', 'accident damage', 'acc dam', 'collision', 'crash', 'unit involved in collision', 'damage from collision', 'repair damage from collision', 'legal hold', 'insurance claim', 'hit by', 'driver hit', 'struck', 'backed into', 'ran into', 'scraped', 'deer strike', 'hit deer', 'curb impact', 'hit curb', 'rock impact', 'road debris', 'windshield impact', 'mirror impact', 'bumper impact', 'impact damage'];
 
             function addAiRecommendationExportRecord(details) {
                 const roNumber = String(details.roNumber || '').trim();
@@ -6304,7 +6351,10 @@
                 let recommendedClass = '';
                 let responsibleQueue = normalizeQueueNameForRepairClass(queueSource);
 
-                const explicitRecommendation = determineRecommendedRepairClassFromEvidence(primaryRepClass, combinedText, spend, g.tireQty, { majorHits, driverAbuseHits, accidentDamageHits, accidentDamageEvidence: hasAccidentDamageEvidence, specialProjectCameraSystem: hasDriverRiskCameraOverride, brakeDiagnosticsScheduled: hasBrakeDiagnosticsScheduled, hvacDiagnostics, aggressiveNotesReview, orderComplexity });
+                const repairSiteContext = normalizeRepairEvidenceText((g.repairSites || []).join(' | '));
+                const isStandardRepairContext = /\b(STANDARD|DEDICATED|INHOUSE|IN HOUSE)\b/.test(repairSiteContext) && !/\b(VENDED|VENDOR|ROAD|ROADSIDE|ERS|ERSA)\b/.test(repairSiteContext);
+                const isVendedRepairContext = /\b(VENDED|VENDOR|ROAD|ROADSIDE|ERS|ERSA)\b/.test(repairSiteContext) || normalizeQueueNameForRepairClass(queueSource).includes('VENDED') || normalizeQueueNameForRepairClass(queueSource).includes('ERS');
+                const explicitRecommendation = determineRecommendedRepairClassFromEvidence(primaryRepClass, combinedText, spend, g.tireQty, { majorHits, driverAbuseHits, accidentDamageHits, accidentDamageEvidence: hasAccidentDamageEvidence, specialProjectCameraSystem: hasDriverRiskCameraOverride, brakeDiagnosticsScheduled: hasBrakeDiagnosticsScheduled, hvacDiagnostics, aggressiveNotesReview, orderComplexity, queueSource, repService, isStandardRepairContext, isVendedRepairContext });
                 if (explicitRecommendation) {
                     recommendedClass = explicitRecommendation.recommendedClass;
                     responsibleQueue = getResponsibleQueueForRecommendation(recommendedClass, queueSource);
@@ -6317,15 +6367,16 @@
                 // Do not recommend OSC PM solely because an RO sits in the PM Queue.
                 // PM coordinators can also own SPECIAL PROJECT and SCHEDULED repair work.
                 // OSC PM recommendations must come from actual PM evidence below.
-                if (!recommendedClass && queueSource === 'ERS' && repService !== 'ERS') {
+                if (!recommendedClass && queueSource === 'ERS' && repService !== 'ERS' && !isStandardRepairContext) {
                     recommendedClass = 'GARDA ERSA';
                     responsibleQueue = 'ERS';
                     flags.push(getFriendlyRepairClassLabel(recommendedClass));
                     suggested.add(recommendedClass);
-                    reasons.push(`This RO is in the ERS queue but current REPCLASS is ${primaryRepClass || 'blank'}.`);
+                    reasons.push(`ERS queue / vended roadside context supports GARDA_ERSA; STANDARD repairs are not reclassified to ERSA.`);
                 }
 
-                if (!recommendedClass && hasExplicitPmSignal && repService !== 'PM' && !hasMajorRepairSignal && !(orderComplexity && orderComplexity.hasComplexPartsRepair)) {
+                const hasRoutineCorrectiveRepairSignal = !!(orderComplexity && ((orderComplexity.partLineCount || 0) > 0 || ((orderComplexity.partKeywordHits || []).length > 0))) || billingContainsAny(combinedText, ['not working','not functioning','inop','inoperative','failed','failure','bad','broken','leak','leaking','no start','not cranking','replace','replaced','repair','repaired']).length > 0;
+                if (!recommendedClass && hasExplicitPmSignal && repService !== 'PM' && !hasMajorRepairSignal && !(orderComplexity && orderComplexity.hasComplexPartsRepair) && !hasRoutineCorrectiveRepairSignal) {
                     recommendedClass = 'OSC PM';
                     responsibleQueue = 'PM';
                     flags.push(getFriendlyRepairClassLabel(recommendedClass));
@@ -6884,7 +6935,7 @@
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.json_to_sheet(rows);
             XLSX.utils.book_append_sheet(wb, ws, 'Billing Queue');
-            XLSX.writeFile(wb, `workFLOW_billing_queue_${new Date().toISOString().slice(0,10)}.xlsx`);
+            XLSX.writeFile(wb, `OSC_billing_queue_${new Date().toISOString().slice(0,10)}.xlsx`);
         }
 
         function processExcelData(vroRaw, roDetailRaw, resourceRawAOA, oosRawAOA, usefulRawAOA, dodRawAOA) {
