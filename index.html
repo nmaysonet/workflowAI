@@ -34,9 +34,10 @@
         .login-error { color: var(--urgent-red); margin-bottom: 15px; font-size: 13px; font-weight: bold; display: none; }
 
         .sidebar { width: 280px; background-color: var(--sidebar-bg); color: var(--text-light); display: flex; flex-direction: column; flex-shrink: 0; }
-        .sidebar-header { padding: 20px; font-size: 24px; font-weight: bold; display: flex; align-items: center; border-bottom: 1px solid #2a2b30; color: var(--gold); }
-        .sidebar-header .logo-text { color: white; margin-left: 8px; font-weight: 800; letter-spacing: 0.5px; }
-        .sidebar-header .logo-plus { color: var(--gold); font-size: 34px; font-weight: 800; margin-left: 3px; line-height: 1; }
+        .sidebar-header { padding: 18px 12px; min-height: 84px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; border-bottom: 1px solid #2a2b30; color: var(--gold); text-align: center; }
+        .sidebar-header .sidebar-logo-wheel { width: 44px; height: 44px; flex: 0 0 44px; display: block; }
+        .sidebar-header .logo-text { color: white; margin-left: 0; font-size: 40px; font-weight: 900; letter-spacing: 1.4px; line-height: 0.95; }
+        .sidebar-header .logo-plus { color: var(--gold); font-size: 44px; font-weight: 900; margin-left: -4px; line-height: 0.9; }
         .menu-item { padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #4a4b50; font-size: 14px; font-weight: 600; transition: 0.2s;}
         .menu-item:hover, .menu-item.active { background-color: var(--sidebar-hover); color: var(--gold); }
         .menu-item.submenu-toggle::after { content: '▸'; font-size: 12px; transition: transform 0.2s ease; }
@@ -488,7 +489,7 @@
 
     <div class="sidebar">
         <div class="sidebar-header">
-            <svg class="logo-spin" width="30" height="30" viewBox="0 0 100 100">
+            <svg class="logo-spin sidebar-logo-wheel" width="44" height="44" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="40" fill="none" stroke="var(--gold)" stroke-width="10"/>
                 <circle cx="50" cy="50" r="10" fill="var(--gold)"/>
                 <g stroke="var(--gold)" stroke-width="10" stroke-linecap="round">
@@ -2366,79 +2367,91 @@
 
 
 
+        const SPEND_GOVERNOR_ALLOWED_CUSTOMER = 'GARDA';
+
         function hasGardaTextSignal(value) {
             return /\bGARDA\b|GARDAWORLD|GARDA\s*WORLD/i.test(String(value || ''));
         }
 
         function hasKnownNonGardaCustomerSignal(value) {
-            const raw = String(value || '').toUpperCase();
+            const raw = String(value || '').toUpperCase().trim();
             if (!raw) return false;
-            return raw.includes('BRINK') ||
-                raw.includes('LOOMIS') ||
-                raw.includes('PUROLATOR') ||
-                raw.includes('COLONY') ||
-                raw.includes('PURPLE WAVE') ||
-                raw.includes('NATIONAL RESCUE') ||
-                raw.includes('DUNBAR') ||
-                raw.includes('ROCHESTER');
+            return /BRINK|LOOMIS|PUROLATOR|FERGUSON|FRONTIER|COLONY|PURPLE|NATIONAL|SYSCO|NACC|IE CONSTRUCTION|US FOOD|STANDARD BEVERAGE|BARTLETT|EATON|PRIMEFLIGHT|SAIL INTERNET|PREMIER TRUCK|DUNBAR|ROCHESTER/i.test(raw);
         }
 
-        function isGardaSpendRecord(rowLike) {
-            const row = rowLike || {};
-            const roNumber = String((row.roNumber || row.roNum || row.order || '') || '').toUpperCase().trim();
-            const fin = window.globalOrderFin && roNumber ? window.globalOrderFin[roNumber] : null;
-            const roContext = (typeof findProcessedRoForWeeklySpend === 'function') ? findProcessedRoForWeeklySpend(row) : null;
+        function isGardaSpendCustomerText(value) {
+            const raw = String(value || '').toUpperCase().trim();
+            if (!raw) return false;
+            if (raw.includes('GARDA')) return true;
+            try {
+                if (typeof workflowNormalizeCustomerName === 'function' && workflowNormalizeCustomerName(value) === SPEND_GOVERNOR_ALLOWED_CUSTOMER) return true;
+            } catch(e) {}
+            try {
+                if (typeof getCustKey === 'function' && getCustKey(value) === SPEND_GOVERNOR_ALLOWED_CUSTOMER) return true;
+            } catch(e) {}
+            return false;
+        }
 
-            const explicitCustomerSignals = [
-                row.custKey,
-                row.preBillingCustomer,
-                row.trueCustomer,
-                row.customerName,
-                row.customerAccount,
-                row.accountCustomer,
-                row.billingCustomer,
-                row.roDetailCustomer,
-                row.customer,
-                roContext && roContext.custKey,
-                roContext && roContext.preBillingCustomer,
-                roContext && roContext.trueCustomer,
-                roContext && roContext.customerName,
-                roContext && roContext.customer,
+        function isExplicitNonGardaSpendText(value) {
+            return hasKnownNonGardaCustomerSignal(value);
+        }
+
+        function getProcessedRoForSpend(roNumber) {
+            const ro = String(roNumber || '').toUpperCase().trim();
+            if (!ro || !Array.isArray(processedData)) return null;
+            return processedData.find(item => String(item && item.roNum ? item.roNum : '').toUpperCase().trim() === ro) || null;
+        }
+
+        function isGardaSpendRecord(record) {
+            if (!record) return false;
+            const roNum = String(record.roNumber || record.roNum || record.order || '').toUpperCase().trim();
+            const matchedRo = getProcessedRoForSpend(roNum) || (typeof findProcessedRoForWeeklySpend === 'function' ? findProcessedRoForWeeklySpend(record) : null);
+            const fin = roNum && window.globalOrderFin ? window.globalOrderFin[roNum] : null;
+
+            const explicitCustomerFields = [
+                record.custKey,
+                record.preBillingCustomer,
+                record.trueCustomer,
+                record.customerName,
+                record.customerAccount,
+                record.accountCustomer,
+                record.billingCustomer,
+                record.customer,
+                record.roDetailCustomer,
+                matchedRo && matchedRo.custKey,
+                matchedRo && matchedRo.preBillingCustomer,
+                matchedRo && matchedRo.trueCustomer,
+                matchedRo && matchedRo.customerName,
+                matchedRo && matchedRo.customer,
                 fin && fin.customer
-            ].filter(v => String(v || '').trim());
+            ].filter(v => v !== undefined && v !== null && String(v).trim() !== '');
 
-            if (explicitCustomerSignals.some(hasGardaTextSignal)) return true;
-            if (explicitCustomerSignals.some(v => String(v || '').toUpperCase().trim() === 'GARDA')) return true;
-            if (explicitCustomerSignals.length && explicitCustomerSignals.some(hasKnownNonGardaCustomerSignal)) return false;
+            if (explicitCustomerFields.some(isGardaSpendCustomerText)) return true;
+            if (explicitCustomerFields.length && explicitCustomerFields.some(isExplicitNonGardaSpendText)) return false;
 
-            const locationSignals = [
-                row.rawCustomerLocation,
-                row.customerLocation,
-                row.branch,
-                row.shop,
-                row.region,
-                row.subregion,
-                row.financialShop,
-                roContext && roContext.rawCustomerLocation,
-                roContext && roContext.customerLocation,
-                roContext && roContext.branch,
-                roContext && roContext.shop,
-                roContext && roContext.region,
-                roContext && roContext.subregion,
+            const locationFields = [
+                record.rawCustomerLocation,
+                record.customerLocation,
+                record.branch,
+                record.shop,
+                record.subregion,
+                record.region,
+                record.financialShop,
+                matchedRo && matchedRo.rawCustomerLocation,
+                matchedRo && matchedRo.customer,
+                matchedRo && matchedRo.customerLocation,
+                matchedRo && matchedRo.branch,
+                matchedRo && matchedRo.subregion,
+                matchedRo && matchedRo.region,
                 fin && fin.customerLocation,
                 fin && fin.shop
-            ].filter(v => String(v || '').trim());
+            ].filter(v => v !== undefined && v !== null && String(v).trim() !== '');
 
-            if (locationSignals.some(hasGardaTextSignal)) return true;
+            if (locationFields.some(isGardaSpendCustomerText)) return true;
 
-            // Garda spend rows often carry the 3-2 branch code instead of the literal customer name.
-            // Only use this after explicit customer checks so known non-Garda customers cannot leak in.
-            if (locationSignals.some(v => !!extractGardaCode(v))) return true;
-
-            if (String(row.custKey || '').toUpperCase().trim() === 'GARDA') return true;
-            if (roContext && String(roContext.custKey || '').toUpperCase().trim() === 'GARDA') return true;
-
-            if (locationSignals.some(hasKnownNonGardaCustomerSignal)) return false;
+            // Garda branch/location codes are allowed only after explicit customer checks,
+            // so non-Garda customers cannot enter Garda Reporting through generic branch text.
+            if (locationFields.some(v => !!extractGardaCode(v))) return true;
 
             return false;
         }
@@ -3463,6 +3476,8 @@
                         unitNo: auth.unitNo || '',
                         branch: auth.branch || auth.customerLocation || '',
                         owner: auth.owner || auth.contact || '',
+                        customer: auth.customer || auth.custKey || '',
+                        rawCustomerLocation: auth.rawCustomerLocation || auth.customerLocation || auth.branch || '',
                         previousStatus: auth.previousStatus || '',
                         currentStatus: auth.currentStatus || auth.lastKnownRoDetailStatus || '',
                         captureType: auth.captureType || auth.countType || auth.source || 'CAPTURED',
@@ -4444,9 +4459,10 @@
                 });
             }
 
-            function stampSpendAuthorization({ safeRo, roNum, unitNo, branch, subregion, region, owner, previousStatus, previousNormalizedStatus, currentStatus, currentNormalizedStatus, spend, spendStatus, spendSource, roDetailStatus, source, countType, inferredOpenedAt, inferredClosedAt }) {
+            function stampSpendAuthorization({ safeRo, roNum, unitNo, branch, subregion, region, owner, customer, rawCustomerLocation, previousStatus, previousNormalizedStatus, currentStatus, currentNormalizedStatus, spend, spendStatus, spendSource, roDetailStatus, source, countType, inferredOpenedAt, inferredClosedAt }) {
                 if (!safeRo || !roNum) return;
-                if (!isGardaSpendRecord({ safeRo, roNumber: roNum, roNum, branch, customerLocation: branch, subregion, region, owner })) return;
+                if (!isGardaSpendRecord({ safeRo, roNumber: roNum, roNum, branch, customer, rawCustomerLocation, customerLocation: rawCustomerLocation || branch, subregion, region, owner })) return;
+                const spendCustomer = customer || SPEND_GOVERNOR_ALLOWED_CUSTOMER;
                 const authUpdatePath = `spendGovernor/authorizations/${weekKey}/${safeRo}`;
                 if (updates[authUpdatePath]) return;
                 // Block true duplicates, but allow a repair if countIndex exists without any saved authorization record.
@@ -4463,6 +4479,8 @@
                     subregion: subregion || '',
                     region: region || '',
                     owner: owner || '',
+                    customer: spendCustomer,
+                    rawCustomerLocation: rawCustomerLocation || branch || '',
                     previousStatus: previousStatus || '',
                     previousNormalizedStatus: previousNormalizedStatus || '',
                     currentStatus: currentStatus || '',
@@ -4500,6 +4518,8 @@
                     subregion: subregion || '',
                     region: region || '',
                     owner: owner || '',
+                    customer: spendCustomer,
+                    rawCustomerLocation: rawCustomerLocation || branch || '',
                     changeType: countType || 'OBSERVED WIP AUTHORIZATION',
                     previousStatus: previousStatus || '',
                     currentStatus: currentStatus || '',
@@ -4619,6 +4639,8 @@
                         subregion: ro.subregion || '',
                         region: ro.region || '',
                         owner: (ro.kpiOwners && ro.kpiOwners.length ? ro.kpiOwners[0] : '') || (ro.drilldownOwners && ro.drilldownOwners.length ? ro.drilldownOwners[0] : '') || '',
+                        customer: ro.preBillingCustomer || ro.custKey || SPEND_GOVERNOR_ALLOWED_CUSTOMER,
+                        rawCustomerLocation: ro.rawCustomerLocation || ro.customer || ro.branch || '',
                         previousStatus: prior ? (prior.status || '') : 'NOT SEEN IN FIREBASE',
                         previousNormalizedStatus: prior ? (prior.normalizedStatus || '') : 'UNKNOWN',
                         currentStatus,
@@ -4708,6 +4730,8 @@
                     subregion: '',
                     region: '',
                     owner: ownerLabel,
+                    customer: fin.customer || SPEND_GOVERNOR_ALLOWED_CUSTOMER,
+                    rawCustomerLocation: fin.customerLocation || fin.shop || '',
                     previousStatus: prior ? (prior.status || '') : 'NOT SEEN IN FIREBASE',
                     previousNormalizedStatus: prior ? (prior.normalizedStatus || '') : 'UNKNOWN',
                     currentStatus,
@@ -4780,6 +4804,8 @@
                     subregion: ev.subregion || '',
                     region: ev.region || '',
                     owner: ev.owner || '',
+                    customer: ev.customer || SPEND_GOVERNOR_ALLOWED_CUSTOMER,
+                    rawCustomerLocation: ev.rawCustomerLocation || ev.branch || '',
                     previousStatus: ev.previousStatus || '',
                     previousNormalizedStatus: ev.previousNormalizedStatus || 'PRE_WIP',
                     currentStatus: ev.currentStatus || '',
