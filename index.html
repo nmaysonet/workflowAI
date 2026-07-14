@@ -2407,6 +2407,57 @@
             return processedData.find(item => String(item && item.roNum ? item.roNum : '').toUpperCase().trim() === ro) || null;
         }
 
+        function getSpendRecordContext(record) {
+            if (!record) return null;
+            const roNum = String(record.roNumber || record.roNum || record.order || '').toUpperCase().trim();
+            const safeRo = record.safeRo || safeFirebaseKey(roNum);
+            if (Array.isArray(processedData)) {
+                const direct = processedData.find(item => {
+                    const itemRo = String(item && item.roNum ? item.roNum : '').toUpperCase().trim();
+                    return itemRo === roNum || (itemRo && safeFirebaseKey(itemRo) === safeRo);
+                });
+                if (direct) return direct;
+            }
+            return null;
+        }
+
+        function getSpendAuthorizationBranchCode(auth, safeRo) {
+            const record = Object.assign({}, auth || {}, { safeRo: safeRo || (auth && auth.safeRo) || '' });
+            const roContext = getSpendRecordContext(record) || (typeof findProcessedRoForWeeklySpend === 'function' ? findProcessedRoForWeeklySpend(record) : null);
+            const roNum = String(record.roNumber || record.roNum || '').toUpperCase().trim();
+            const fin = roNum && window.globalOrderFin ? window.globalOrderFin[roNum] : null;
+
+            const candidates = [
+                record.branch,
+                record.customerLocation,
+                record.rawCustomerLocation,
+                record.shop,
+                record.location,
+                fin && fin.branch,
+                fin && fin.customerLocation,
+                fin && fin.shop,
+                roContext && roContext.branch,
+                roContext && roContext.customerLocation,
+                roContext && roContext.rawCustomerLocation,
+                roContext && roContext.customer,
+                roContext && roContext.subregion,
+                roContext && roContext.region
+            ].filter(v => v !== undefined && v !== null && String(v).trim() !== '');
+
+            for (const value of candidates) {
+                const code = extractGardaCode(value);
+                if (code) return code;
+            }
+
+            for (const value of candidates) {
+                const normalized = normalizeBranchStr(value);
+                if (normalized) return normalized;
+            }
+
+            return 'UNKNOWN';
+        }
+
+
         function isGardaSpendRecord(record) {
             if (!record) return false;
             const roNum = String(record.roNumber || record.roNum || record.order || '').toUpperCase().trim();
@@ -3519,7 +3570,7 @@
                         safeRo: safeRo,
                         roNumber: roNumber,
                         unitNo: auth.unitNo || '',
-                        branch: auth.branch || auth.customerLocation || '',
+                        branch: auth.branch || auth.customerLocation || (findProcessedRoForWeeklySpend(Object.assign({}, auth, { safeRo, roNumber })) || {}).branch || '',
                         owner: auth.owner || auth.contact || '',
                         customer: auth.customer || auth.custKey || '',
                         rawCustomerLocation: auth.rawCustomerLocation || auth.customerLocation || auth.branch || '',
@@ -4792,8 +4843,9 @@
             let pendingSpendCount = 0;
             let branchAuthorized = {};
 
-            Object.values(weeklyAuthorizations).forEach(auth => {
-                if (!isGardaSpendRecord(auth)) return;
+            Object.keys(weeklyAuthorizations).forEach(safeRo => {
+                const auth = weeklyAuthorizations[safeRo] || {};
+                if (!isGardaSpendRecord(Object.assign({}, auth, { safeRo, roNumber: auth.roNumber || auth.roNum || safeRo }))) return;
                 const spend = Number(auth.spend || 0);
                 weeklyAuthorizedTotal += spend;
 
@@ -4801,7 +4853,7 @@
                     pendingSpendCount++;
                 }
 
-                const branchCode = extractGardaCode(auth.branch) || normalizeBranchStr(auth.branch) || 'UNKNOWN';
+                const branchCode = getSpendAuthorizationBranchCode(auth, safeRo);
                 if (!branchAuthorized[branchCode]) {
                     branchAuthorized[branchCode] = { closedRev: 0, wipRev: 0, authorizedRev: 0 };
                 }
