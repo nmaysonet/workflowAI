@@ -172,6 +172,11 @@
         .weekly-budget-pill.excluded { background: #f3e8ff; color: #7c3aed; border: 1px solid #d8b4fe; }
         .weekly-history-split-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; width: 100%; min-height: 36px; }
         .weekly-history-split-text { color: #334155; font-weight: 900; font-size: 11px; line-height: 1.15; text-align: center; }
+        .weekly-history-created-metric { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; line-height:1.15; }
+        .weekly-history-created-metric .metric-main { font-size:11px; font-weight:900; white-space:nowrap; }
+        .weekly-history-created-metric .metric-sub { font-size:9px; font-weight:900; color:#64748b; white-space:nowrap; }
+        .weekly-history-split .split-line { display:block; white-space:nowrap; }
+        .weekly-history-split .split-line strong { color:#111827; }
         @media (max-width: 1450px) {
             .weekly-history-rollup-row { grid-template-columns: 82px minmax(220px, 1fr) 140px 72px 205px; gap: 9px; }
             .weekly-history-table .col-spend { width: 14.5%; }
@@ -3728,6 +3733,11 @@
                 const currentSpend = Number(group.createdThisWeekSpend || 0);
                 const priorSpend = Number(group.createdPriorWeeksSpend || 0);
                 const unknownSpend = Number(group.createdUnknownWeekSpend || 0);
+                const createdPctDenom = Math.max(weekSpend, 0.01);
+                const currentSpendPct = (currentSpend / createdPctDenom) * 100;
+                const priorSpendPct = (priorSpend / createdPctDenom) * 100;
+                const unknownSpendPct = (unknownSpend / createdPctDenom) * 100;
+                const unknownSplitText = unknownSpend > 0.009 ? `<span class="split-line">Unknown: <strong>${group.createdUnknownWeekCount} | ${formatWeeklyHistoryMoney(unknownSpend)} (${unknownSpendPct.toFixed(1)}%)</strong></span>` : '';
                 const currentPctCap = Math.max(0, Math.min(100, (currentSpend / weeklyCapForBars) * 100));
                 const priorPctCap = Math.max(0, Math.min(100 - currentPctCap, (priorSpend / weeklyCapForBars) * 100));
                 const unknownPctCap = Math.max(0, Math.min(100 - currentPctCap - priorPctCap, (unknownSpend / weeklyCapForBars) * 100));
@@ -3750,18 +3760,25 @@
                         </div>
                         <div class="weekly-history-amount" style="color:${amountColor};">${formatWeeklyHistoryMoney(weekSpend)}${capLabel}</div>
                         <div class="weekly-history-vros">${group.vroCount} VROs</div>
-                        <div class="weekly-history-split"><span>${group.createdThisWeekCount} created this week / ${group.createdPriorWeeksCount} prior weeks</span>${lockLabel}</div>
+                        <div class="weekly-history-split">
+                            <span class="split-line">This week: <strong>${group.createdThisWeekCount} | ${formatWeeklyHistoryMoney(currentSpend)} (${currentSpendPct.toFixed(1)}%)</strong></span>
+                            <span class="split-line">Prior weeks: <strong>${group.createdPriorWeeksCount} | ${formatWeeklyHistoryMoney(priorSpend)} (${priorSpendPct.toFixed(1)}%)</strong></span>
+                            ${unknownSplitText}
+                            ${lockLabel}
+                        </div>
                     </div>`;
             });
             html += `</div>`;
             html += `<div class="weekly-history-table-wrap"><table class="weekly-history-table"><thead><tr>
-                <th class="col-expand">Expand</th><th class="col-week">Week</th><th class="col-weekend">Week End</th><th class="col-spend">EOW / Captured Spend</th><th class="col-vros">VROs</th><th class="col-vros">Created This Week</th><th class="col-vros">Created Prior Weeks</th><th class="col-budget">Budget Included</th><th class="col-budget">Budget Excluded</th><th class="col-split">Budget Split</th>
+                <th class="col-expand">Expand</th><th class="col-week">Week</th><th class="col-weekend">Week End</th><th class="col-spend">EOW / Captured Spend</th><th class="col-vros">VROs</th><th class="col-vros">Created This Week<br>Count | $ | %</th><th class="col-vros">Created Prior Weeks<br>Count | $ | %</th><th class="col-budget">Budget Included</th><th class="col-budget">Budget Excluded</th><th class="col-split">Budget Split</th>
             </tr></thead><tbody>`;
             groups.forEach(group => {
                 const isOpen = !!expandedWeeklySpendWeeks[group.weekKey];
                 const splitText = `${Number(group.budgetIncludedPct || 0).toFixed(1)}% Included / ${Number(group.budgetExcludedPct || 0).toFixed(1)}% Excluded`;
                 const statusText = group.allocationLocked ? 'EOW Locked' : 'Live';
-                html += `<tr><td><button class="filter-btn weekly-history-expand-btn" onclick="toggleWeeklySpendWeek('${escapeHtml(group.weekKey)}')">${isOpen ? '−' : '+'}</button></td><td style="font-weight:900;">${escapeHtml(group.weekKey)}</td><td class="weekly-history-muted">${escapeHtml(group.weekEndDate || '')}</td><td class="weekly-history-money" style="color:${Number(group.totalSpend || 0) >= WEEKLY_WIP_AUTH_CAP ? '#dc2626' : '#16a34a'};">${formatWeeklyHistoryMoney(group.totalSpend || 0)}</td><td style="font-weight:900;">${group.vroCount}</td><td style="font-weight:900; color:#2563eb;">${group.createdThisWeekCount}</td><td style="font-weight:900; color:#dc2626;">${group.createdPriorWeeksCount}</td><td class="weekly-history-money" style="color:#16a34a;">${formatWeeklyHistoryMoney(group.budgetIncludedSpend || 0)}</td><td class="weekly-history-money" style="color:#7c3aed;">${formatWeeklyHistoryMoney(group.budgetExcludedSpend || 0)}</td><td><div class="weekly-history-split-cell"><span class="weekly-history-split-text">${escapeHtml(splitText)}</span><span class="weekly-history-status-pill ${group.allocationLocked ? 'locked' : 'live'}">${escapeHtml(statusText.toUpperCase())}</span></div></td></tr>`;
+                const createdThisWeekCellPct = Number(group.createdThisWeekPct || 0);
+                const createdPriorWeeksCellPct = Number(group.createdPriorWeeksPct || 0);
+                html += `<tr><td><button class="filter-btn weekly-history-expand-btn" onclick="toggleWeeklySpendWeek('${escapeHtml(group.weekKey)}')">${isOpen ? '−' : '+'}</button></td><td style="font-weight:900;">${escapeHtml(group.weekKey)}</td><td class="weekly-history-muted">${escapeHtml(group.weekEndDate || '')}</td><td class="weekly-history-money" style="color:${Number(group.totalSpend || 0) >= WEEKLY_WIP_AUTH_CAP ? '#dc2626' : '#16a34a'};">${formatWeeklyHistoryMoney(group.totalSpend || 0)}</td><td style="font-weight:900;">${group.vroCount}</td><td><div class="weekly-history-created-metric" style="color:#2563eb;"><span class="metric-main">${group.createdThisWeekCount} | ${formatWeeklyHistoryMoney(group.createdThisWeekSpend || 0)}</span><span class="metric-sub">${createdThisWeekCellPct.toFixed(1)}% of spend</span></div></td><td><div class="weekly-history-created-metric" style="color:#dc2626;"><span class="metric-main">${group.createdPriorWeeksCount} | ${formatWeeklyHistoryMoney(group.createdPriorWeeksSpend || 0)}</span><span class="metric-sub">${createdPriorWeeksCellPct.toFixed(1)}% of spend</span></div></td><td class="weekly-history-money" style="color:#16a34a;">${formatWeeklyHistoryMoney(group.budgetIncludedSpend || 0)}</td><td class="weekly-history-money" style="color:#7c3aed;">${formatWeeklyHistoryMoney(group.budgetExcludedSpend || 0)}</td><td><div class="weekly-history-split-cell"><span class="weekly-history-split-text">${escapeHtml(splitText)}</span><span class="weekly-history-status-pill ${group.allocationLocked ? 'locked' : 'live'}">${escapeHtml(statusText.toUpperCase())}</span></div></td></tr>`;
                 if (isOpen) {
                     html += `<tr><td colspan="10" class="weekly-history-detail-cell"><div class="weekly-history-detail-panel"><table class="weekly-history-detail-table"><thead><tr><th style="width:118px;">Captured At</th><th style="width:105px;">AFS RO #</th><th style="width:78px;">Unit No</th><th style="width:142px;">Branch / Site</th><th style="width:112px;">Owner</th><th style="width:98px;">Capture Type</th><th style="width:82px;">RO Type</th><th style="width:92px;">Created Week</th><th style="width:118px;">Created Timing</th><th style="width:118px;">Current Repair Class</th><th style="width:118px;">Transfer Repair Class</th><th style="width:88px;">Budget Bucket</th><th style="width:106px;">Previous Status</th><th style="width:106px;">Current Status</th><th style="width:92px;">Spend</th><th style="width:102px;">Included</th><th style="width:102px;">Excluded</th></tr></thead><tbody>`;
                     group.rows.forEach(row => {
@@ -4010,11 +4027,14 @@
                 'EOW / Captured Spend': Number(g.totalSpend || 0),
                 'VRO Count': g.vroCount,
                 'Created This Week VROs': Number(g.createdThisWeekCount || 0),
+                'Created This Week Spend': Number(g.createdThisWeekSpend || 0),
+                'Created This Week % of Spend': Number(g.createdThisWeekPct || 0) / 100,
                 'Created Prior Weeks VROs': Number(g.createdPriorWeeksCount || 0),
+                'Created Prior Weeks Spend': Number(g.createdPriorWeeksSpend || 0),
+                'Created Prior Weeks % of Spend': Number(g.createdPriorWeeksPct || 0) / 100,
                 'Unknown Created Week VROs': Number(g.createdUnknownWeekCount || 0),
-                'Spend Created This Week': Number(g.createdThisWeekSpend || 0),
-                'Spend Created Prior Weeks': Number(g.createdPriorWeeksSpend || 0),
-                'Spend Unknown Created Week': Number(g.createdUnknownWeekSpend || 0),
+                'Unknown Created Week Spend': Number(g.createdUnknownWeekSpend || 0),
+                'Unknown Created Week % of Spend': Number(g.createdUnknownWeekPct || 0) / 100,
                 'Budget Included Spend': Number(g.budgetIncludedSpend || 0),
                 'Budget Included %': Number(g.budgetIncludedPct || 0) / 100,
                 'Budget Excluded Spend': Number(g.budgetExcludedSpend || 0),
