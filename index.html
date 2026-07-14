@@ -3795,6 +3795,157 @@
             container.innerHTML = html;
         }
 
+        function createWeeklyRepairClassBucket() {
+            return {
+                byClass: {},
+                inBudgetTotal: 0,
+                outBudgetTotal: 0,
+                grandTotal: 0,
+                inBudgetVroSet: new Set(),
+                outBudgetVroSet: new Set(),
+                grandVroSet: new Set()
+            };
+        }
+
+        function addWeeklyRepairClassAmount(model, repairClass, row, spend) {
+            const amount = Number(spend || 0);
+            const cls = String(repairClass || 'Not Available').trim() || 'Not Available';
+            const budgetIncluded = isBudgetIncludedRepairClass(cls);
+            const budgetKey = budgetIncluded ? 'In-Budget' : 'Out-of-Budget';
+            const roKey = String((row && (row.roNumber || row.safeRo)) || '').trim();
+            if (!model.byClass[cls]) {
+                model.byClass[cls] = {
+                    repairClass: cls,
+                    budgetBucket: budgetKey,
+                    spend: 0,
+                    vroSet: new Set()
+                };
+            }
+            model.byClass[cls].spend += amount;
+            if (roKey) model.byClass[cls].vroSet.add(roKey);
+            if (budgetIncluded) {
+                model.inBudgetTotal += amount;
+                if (roKey) model.inBudgetVroSet.add(roKey);
+            } else {
+                model.outBudgetTotal += amount;
+                if (roKey) model.outBudgetVroSet.add(roKey);
+            }
+            model.grandTotal += amount;
+            if (roKey) model.grandVroSet.add(roKey);
+        }
+
+        function finalizeWeeklyRepairClassBucket(model) {
+            const repairClasses = Object.values(model.byClass || {}).map(item => ({
+                repairClass: item.repairClass,
+                budgetBucket: item.budgetBucket,
+                spend: Number(item.spend || 0),
+                vroCount: item.vroSet ? item.vroSet.size : 0
+            })).sort((a, b) => {
+                const bucketOrder = (a.budgetBucket === 'In-Budget' ? 0 : 1) - (b.budgetBucket === 'In-Budget' ? 0 : 1);
+                if (bucketOrder !== 0) return bucketOrder;
+                if (Number(b.spend || 0) !== Number(a.spend || 0)) return Number(b.spend || 0) - Number(a.spend || 0);
+                return String(a.repairClass || '').localeCompare(String(b.repairClass || ''));
+            });
+            return {
+                repairClasses,
+                inBudgetTotal: Number(model.inBudgetTotal || 0),
+                outBudgetTotal: Number(model.outBudgetTotal || 0),
+                grandTotal: Number(model.grandTotal || 0),
+                inBudgetVroCount: model.inBudgetVroSet ? model.inBudgetVroSet.size : 0,
+                outBudgetVroCount: model.outBudgetVroSet ? model.outBudgetVroSet.size : 0,
+                grandVroCount: model.grandVroSet ? model.grandVroSet.size : 0
+            };
+        }
+
+        function buildWeeklySpendTableSummaryGroups(rows, spendChannel = 'Vended') {
+            const map = {};
+            (rows || []).forEach(row => {
+                if (getWeeklySpendChannel(row) !== spendChannel) return;
+                const week = row.weekKey || 'UNKNOWN';
+                if (!map[week]) {
+                    map[week] = {
+                        weekKey: week,
+                        weekEndDate: getWeekEndLabel(week),
+                        vroSet: new Set(),
+                        original: createWeeklyRepairClassBucket(),
+                        transfer: createWeeklyRepairClassBucket()
+                    };
+                }
+                const group = map[week];
+                const roKey = row.roNumber || row.safeRo || '';
+                if (roKey) group.vroSet.add(roKey);
+                const spend = Number(row.spend || 0);
+                addWeeklyRepairClassAmount(group.original, row.currentRepairClass || 'Not Available', row, spend);
+                addWeeklyRepairClassAmount(group.transfer, getWeeklyTransferAllocationClass(row.currentRepairClass || 'Not Available', row.transferRepairClass || 'No Transfer'), row, spend);
+            });
+            return Object.values(map).map(group => {
+                group.original = finalizeWeeklyRepairClassBucket(group.original);
+                group.transfer = finalizeWeeklyRepairClassBucket(group.transfer);
+                group.vroCount = Math.max(group.original.grandVroCount || 0, group.transfer.grandVroCount || 0, group.vroSet ? group.vroSet.size : 0);
+                delete group.vroSet;
+                return group;
+            }).sort((a, b) => getWeekSortValue(b.weekKey) - getWeekSortValue(a.weekKey));
+        }
+
+        function formatWeeklySpendPercent(part, total) {
+            const denominator = Number(total || 0);
+            if (!denominator) return '0.0%';
+            return `${((Number(part || 0) / denominator) * 100).toFixed(1)}%`;
+        }
+
+        function renderWeeklyRepairClassRows(model, bucketName) {
+            const rows = (model.repairClasses || []).filter(item => item.budgetBucket === bucketName);
+            const isInBudget = bucketName === 'In-Budget';
+            const subtotal = isInBudget ? model.inBudgetTotal : model.outBudgetTotal;
+            const subtotalVros = isInBudget ? model.inBudgetVroCount : model.outBudgetVroCount;
+            const pillClass = isInBudget ? 'in' : 'out';
+            const label = isInBudget ? 'IN-BUDGET' : 'OUT-OF-BUDGET';
+            if (rows.length === 0) {
+                return `<tr class="weekly-pivot-empty"><td><span class="weekly-rc-pill ${pillClass}">${label}</span></td><td class="weekly-rc-name">No repair classes</td><td class="weekly-pivot-money">${formatWeeklyHistoryMoney(0)}</td><td>0</td><td>0.0%</td></tr>`;
+            }
+            const detailRows = rows.map((item, idx) => `<tr class="${isInBudget ? 'weekly-pivot-row-in' : 'weekly-pivot-row-out'}">
+                    <td>${idx === 0 ? `<span class="weekly-rc-pill ${pillClass}">${label}</span>` : ''}</td>
+                    <td class="weekly-rc-name">${escapeHtml(item.repairClass || 'Not Available')}</td>
+                    <td class="weekly-pivot-money">${formatWeeklyHistoryMoney(item.spend || 0)}</td>
+                    <td>${item.vroCount || 0}</td>
+                    <td>${formatWeeklySpendPercent(item.spend || 0, model.grandTotal || 0)}</td>
+                </tr>`).join('');
+            return detailRows + `<tr class="weekly-pivot-subtotal">
+                <td></td>
+                <td class="weekly-rc-name">${escapeHtml(bucketName)} Total</td>
+                <td class="weekly-pivot-money">${formatWeeklyHistoryMoney(subtotal || 0)}</td>
+                <td>${subtotalVros || 0}</td>
+                <td>${formatWeeklySpendPercent(subtotal || 0, model.grandTotal || 0)}</td>
+            </tr>`;
+        }
+
+        function renderWeeklySpendPivotTable(title, subtitle, model, spendLabel = 'Vended Spend') {
+            return `<div class="weekly-pivot-box">
+                <div class="weekly-pivot-title">${escapeHtml(title)}</div>
+                <div class="weekly-pivot-subtitle">${escapeHtml(subtitle)}</div>
+                <table class="weekly-pivot-table">
+                    <thead><tr>
+                        <th class="weekly-rc-col-bucket">Budget</th>
+                        <th class="weekly-rc-col-class">Repair Class</th>
+                        <th class="weekly-rc-col-money">${escapeHtml(spendLabel)}</th>
+                        <th class="weekly-rc-col-count">VROs</th>
+                        <th class="weekly-rc-col-pct">Split</th>
+                    </tr></thead>
+                    <tbody>
+                        ${renderWeeklyRepairClassRows(model, 'In-Budget')}
+                        ${renderWeeklyRepairClassRows(model, 'Out-of-Budget')}
+                        <tr class="weekly-pivot-grand">
+                            <td></td>
+                            <td class="weekly-rc-name">Grand Total</td>
+                            <td class="weekly-pivot-money">${formatWeeklyHistoryMoney(model.grandTotal || 0)}</td>
+                            <td>${model.grandVroCount || 0}</td>
+                            <td>100.0%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>`;
+        }
+
         function renderWeeklySpendTableSummary() {
             renderWeeklySpendTableSummaryForChannel({
                 spendChannel: 'Vended',
