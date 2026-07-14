@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSC+ Weekly Spend Matrix + AI</title>
+    <title>OSC+ AI | Weekly Spend Matrix</title>
     <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -38,6 +38,7 @@
         .sidebar-header .sidebar-logo-wheel { width: 44px; height: 44px; flex: 0 0 44px; display: block; }
         .sidebar-header .logo-text { color: white; margin-left: 0; font-size: 40px; font-weight: 900; letter-spacing: 1.4px; line-height: 0.95; }
         .sidebar-header .logo-plus { color: var(--gold); font-size: 44px; font-weight: 900; margin-left: -4px; line-height: 0.9; }
+        .sidebar-header .logo-ai-text { color: white; font-size: 31px; font-weight: 900; letter-spacing: 1.2px; line-height: 0.95; margin-left: 0; }
         .menu-item { padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #4a4b50; font-size: 14px; font-weight: 600; transition: 0.2s;}
         .menu-item:hover, .menu-item.active { background-color: var(--sidebar-hover); color: var(--gold); }
         .menu-item.submenu-toggle::after { content: '▸'; font-size: 12px; transition: transform 0.2s ease; }
@@ -132,6 +133,9 @@
         .weekly-history-bars { min-width: 0; }
         .weekly-history-cap-bar { background: #e2e8f0; border-radius: 999px; height: 18px; overflow: hidden; margin-bottom: 5px; }
         .weekly-history-budget-bar { display: flex; height: 9px; border-radius: 999px; overflow: hidden; background: #e2e8f0; }
+        .weekly-history-created-bar { display:flex; height:18px; border-radius:999px; overflow:hidden; background:#e2e8f0; }
+        .weekly-history-created-segment { height:100%; min-width:0; }
+        .weekly-history-created-counts { color:#334155; font-weight:900; font-size:10.5px; line-height:1.2; text-align:center; }
         .weekly-history-amount { font-weight: 900; text-align: center; white-space: nowrap; }
         .weekly-history-vros { font-size: 12px; color: #64748b; font-weight: 800; text-align: center; white-space: nowrap; }
         .weekly-history-split { font-size: 11px; color: #334155; font-weight: 900; text-align: center; line-height: 1.15; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
@@ -480,7 +484,7 @@
                     <line x1="50" y1="50" x2="50" y2="15" /><line x1="50" y1="50" x2="83" y2="39" /><line x1="50" y1="50" x2="70" y2="78" /><line x1="50" y1="50" x2="30" y2="78" /><line x1="50" y1="50" x2="17" y2="39" />
                 </g>
             </svg>
-            <h2>OSC+ Login</h2>
+            <h2>OSC+ AI Login</h2>
             <div id="login-error" class="login-error">Incorrect Password</div>
             <input type="password" id="login-pass" placeholder="Enter Password" onkeypress="if(event.key === 'Enter') checkLogin()">
             <button onclick="checkLogin()">ENTER</button>
@@ -502,6 +506,7 @@
             </svg>
             <span class="logo-text">OSC</span>
             <span class="logo-plus">+</span>
+            <span class="logo-ai-text">AI</span>
         </div>
         <div class="menu-item active" id="menu-spend" onclick="navigate('spend-view', this)">Weekly Spend Matrix</div>
         
@@ -559,7 +564,7 @@
         </div>
 
         <div id="home-view" class="view-section">
-            <h1 class="home-title">Welcome to OSC+</h1>
+            <h1 class="home-title">Welcome to OSC+ AI</h1>
             <div class="upload-container" id="upload-box">
                 <h3>Loading Dashboard Data</h3>
                 <p style="color: #666; margin-bottom: 15px; font-size: 14px;">Attempting to fetch the OSC+ dashboard workbook from Firebase Storage...</p>
@@ -2489,7 +2494,43 @@
             return null;
         }
 
-        const WEEKLY_WIP_AUTH_CAP = 225000;
+
+        function getWeeklyHistoryCreatedDate(row) {
+            if (!row) return null;
+            const candidates = [
+                row.openedDate,
+                row.openedFormatted,
+                row.createdDate,
+                row.createdAt,
+                row.roCreatedDate,
+                row.vroCreatedDate,
+                row.createdOn
+            ];
+            for (const value of candidates) {
+                const parsed = parseDateSafe(value);
+                if (parsed && !isNaN(parsed.getTime())) return parsed;
+            }
+            return null;
+        }
+
+        function getWeeklyHistoryCreatedWeekKey(row) {
+            const createdDate = getWeeklyHistoryCreatedDate(row);
+            return createdDate ? getWeekKey(createdDate) : '';
+        }
+
+        function isWeeklyHistoryCreatedInSpendWeek(row) {
+            const createdWeekKey = row && (row.createdWeekKey || getWeeklyHistoryCreatedWeekKey(row));
+            const spendWeekKey = row && row.weekKey;
+            return !!(createdWeekKey && spendWeekKey && createdWeekKey === spendWeekKey);
+        }
+
+        function getWeeklyHistoryCreatedTiming(row) {
+            const createdWeekKey = row && (row.createdWeekKey || getWeeklyHistoryCreatedWeekKey(row));
+            if (!createdWeekKey) return 'Unknown Created Week';
+            return isWeeklyHistoryCreatedInSpendWeek(row) ? 'Created Same Week' : 'Created Prior Week(s)';
+        }
+
+        const WEEKLY_WIP_AUTH_CAP = 500000;
         const WEEKLY_WIP_RELEASE_THRESHOLD = WEEKLY_WIP_AUTH_CAP; // Hard cap: stop new releases once the weekly cap is reached.
         const MANUAL_GOVERNOR_PASSWORD_B64 = 'QW1lcml0MDI4MyQ=';
         const MANUAL_GOVERNOR_TZ = 'America/New_York';
@@ -3482,13 +3523,16 @@
                         currentStatus: auth.currentStatus || auth.lastKnownRoDetailStatus || '',
                         captureType: auth.captureType || auth.countType || auth.source || 'CAPTURED',
                         capturedAt: auth.capturedAt || auth.authorizedAt || auth.spendCapturedAt || auth.spendUpdatedAt || '',
-                        openedDate: auth.openedDate || auth.openedFormatted || '',
+                        openedDate: auth.openedDate || auth.openedFormatted || auth.createdDate || auth.createdAt || auth.roCreatedDate || auth.vroCreatedDate || '',
                         completedDate: auth.completedDate || auth.completedFormatted || '',
                         spend: displaySpend,
                         spendStatus: auth.spendStatus || '',
                         spendSource: auth.spendSource || '',
                         roUrl: getAuthRowRoUrl(roNumber)
                     };
+                    baseRow.createdWeekKey = getWeeklyHistoryCreatedWeekKey(baseRow);
+                    baseRow.createdTiming = getWeeklyHistoryCreatedTiming(baseRow);
+                    baseRow.createdInSpendWeek = isWeeklyHistoryCreatedInSpendWeek(baseRow);
                     baseRow.roWorkType = getWeeklyRoWorkType(Object.assign({}, auth, baseRow));
                     baseRow.spendChannel = getWeeklySpendChannel(Object.assign({}, auth, baseRow));
                     const repairClassInfo = getRepairClassInfoForWeeklySpend(Object.assign({}, auth, baseRow), true);
@@ -3508,21 +3552,59 @@
             (rows || []).forEach(row => {
                 const week = row.weekKey || 'UNKNOWN';
                 if (!map[week]) {
-                    map[week] = { weekKey: week, weekEndDate: getWeekEndLabel(week), totalSpend: 0, budgetIncludedSpend: 0, budgetExcludedSpend: 0, vroCount: 0, lockedRows: 0, rows: [] };
+                    map[week] = {
+                        weekKey: week,
+                        weekEndDate: getWeekEndLabel(week),
+                        totalSpend: 0,
+                        budgetIncludedSpend: 0,
+                        budgetExcludedSpend: 0,
+                        createdThisWeekSpend: 0,
+                        createdPriorWeeksSpend: 0,
+                        createdUnknownWeekSpend: 0,
+                        vroCount: 0,
+                        createdThisWeekCount: 0,
+                        createdPriorWeeksCount: 0,
+                        createdUnknownWeekCount: 0,
+                        lockedRows: 0,
+                        rows: []
+                    };
                 }
+                const createdWeekKey = row.createdWeekKey || getWeeklyHistoryCreatedWeekKey(row);
+                row.createdWeekKey = createdWeekKey;
+                row.createdTiming = getWeeklyHistoryCreatedTiming(row);
+                row.createdInSpendWeek = isWeeklyHistoryCreatedInSpendWeek(row);
                 map[week].rows.push(row);
                 map[week].totalSpend += Number(row.spend || 0);
                 map[week].budgetIncludedSpend += Number(row.budgetIncludedSpend || 0);
                 map[week].budgetExcludedSpend += Number(row.budgetExcludedSpend || 0);
+                if (!createdWeekKey) map[week].createdUnknownWeekSpend += Number(row.spend || 0);
+                else if (row.createdInSpendWeek) map[week].createdThisWeekSpend += Number(row.spend || 0);
+                else map[week].createdPriorWeeksSpend += Number(row.spend || 0);
                 if (row.budgetSnapshotLocked) map[week].lockedRows += 1;
             });
             Object.values(map).forEach(group => {
                 const uniqueRos = new Set(group.rows.map(r => r.roNumber || r.safeRo));
+                const createdThisWeekRos = new Set();
+                const createdPriorWeeksRos = new Set();
+                const createdUnknownWeekRos = new Set();
+                group.rows.forEach(r => {
+                    const key = r.roNumber || r.safeRo;
+                    if (!key) return;
+                    if (!r.createdWeekKey) createdUnknownWeekRos.add(key);
+                    else if (r.createdInSpendWeek) createdThisWeekRos.add(key);
+                    else createdPriorWeeksRos.add(key);
+                });
                 group.vroCount = uniqueRos.size;
+                group.createdThisWeekCount = createdThisWeekRos.size;
+                group.createdPriorWeeksCount = createdPriorWeeksRos.size;
+                group.createdUnknownWeekCount = createdUnknownWeekRos.size;
                 group.rows.sort((a, b) => new Date(b.capturedAt || 0) - new Date(a.capturedAt || 0));
                 const denom = Math.max(Number(group.totalSpend || 0), 0.01);
                 group.budgetIncludedPct = (Number(group.budgetIncludedSpend || 0) / denom) * 100;
                 group.budgetExcludedPct = (Number(group.budgetExcludedSpend || 0) / denom) * 100;
+                group.createdThisWeekPct = (Number(group.createdThisWeekSpend || 0) / denom) * 100;
+                group.createdPriorWeeksPct = (Number(group.createdPriorWeeksSpend || 0) / denom) * 100;
+                group.createdUnknownWeekPct = (Number(group.createdUnknownWeekSpend || 0) / denom) * 100;
                 group.allocationLocked = group.rows.length > 0 && group.lockedRows === group.rows.length;
             });
             return Object.values(map).sort((a, b) => getWeekSortValue(b.weekKey) - getWeekSortValue(a.weekKey));
@@ -3565,280 +3647,79 @@
         function renderWeeklySpendHistory() {
             const container = document.getElementById('weekly-spend-history-body');
             if (!container) return;
-
             const groups = groupWeeklySpendHistory(filterGardaSpendRows(globalWeeklySpendHistoryRows || []));
             if (groups.length === 0) {
                 container.innerHTML = `<div style="padding:18px; text-align:center; color:#64748b; font-weight:800; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">No weekly spend history has been logged yet. Weekly totals will appear as Firebase governor authorizations are created.</div>`;
                 return;
             }
-
             const weeklyCapForBars = Math.max(Number(WEEKLY_WIP_AUTH_CAP || 0), 1);
             let html = `<div class="weekly-history-shell">
                 <div class="weekly-history-legend">
-                    <span><span class="legend-chip" style="background:#16a34a;"></span>Under Weekly Cap</span>
-                    <span><span class="legend-chip" style="background:#dc2626;"></span>At / Over Weekly Cap</span>
-                    <span><span class="legend-chip" style="background:#2563eb;"></span>Budget Included</span>
-                    <span><span class="legend-chip" style="background:#7c3aed;"></span>Budget Excluded</span>
+                    <span><span class="legend-chip" style="background:#2563eb;"></span>Spend on VROs created in current week</span>
+                    <span><span class="legend-chip" style="background:#dc2626;"></span>Spend on VROs created before current week</span>
+                    <span><span class="legend-chip" style="background:#7dd3fc;"></span>Remaining weekly cap</span>
+                    <span><span class="legend-chip" style="background:#94a3b8;"></span>Unknown created week</span>
                     <span style="color:#64748b;">Weekly Cap: $${Number(WEEKLY_WIP_AUTH_CAP || 0).toLocaleString('en-US', {maximumFractionDigits:0})}</span>
                 </div>
-                <div class="weekly-history-note">
-                    Weekly History bridges end-of-week spend to current repair class, AI transfer repair class, and Budget Included / Budget Excluded allocation. In-Budget includes SCHEDULED, OSC PM, and DEF MAINT; all other repair classes are Budget Excluded. Closed weeks are locked as an End-of-Week snapshot once Aging Repairs review logic is loaded.
-                </div>
+                <div class="weekly-history-note">Weekly History shows Garda-only captured spend by authorization week. The top bar splits the weekly cap by VROs created in the same week versus VROs created in prior weeks, so older work consuming the current week's cap is visible. The lower thin bar still shows Budget Included / Budget Excluded allocation.</div>
                 <div class="weekly-history-rollup">`;
-
             groups.forEach(group => {
                 const weekSpend = Number(group.totalSpend || 0);
                 const isOverCap = weekSpend >= WEEKLY_WIP_AUTH_CAP;
-                const barColor = isOverCap ? '#dc2626' : '#16a34a';
                 const amountColor = isOverCap ? '#dc2626' : '#111827';
                 const capLabel = isOverCap ? '<span class="weekly-history-status-pill over-cap">OVER CAP</span>' : '';
                 const lockLabel = group.allocationLocked ? '<span class="weekly-history-status-pill locked">EOW LOCKED</span>' : '<span class="weekly-history-status-pill live">LIVE</span>';
-                const pct = Math.max(1, Math.min(100, (weekSpend / weeklyCapForBars) * 100));
+                const currentSpend = Number(group.createdThisWeekSpend || 0);
+                const priorSpend = Number(group.createdPriorWeeksSpend || 0);
+                const unknownSpend = Number(group.createdUnknownWeekSpend || 0);
+                const currentPctCap = Math.max(0, Math.min(100, (currentSpend / weeklyCapForBars) * 100));
+                const priorPctCap = Math.max(0, Math.min(100 - currentPctCap, (priorSpend / weeklyCapForBars) * 100));
+                const unknownPctCap = Math.max(0, Math.min(100 - currentPctCap - priorPctCap, (unknownSpend / weeklyCapForBars) * 100));
+                const remainingPct = Math.max(0, 100 - currentPctCap - priorPctCap - unknownPctCap);
                 const includedPct = Number(group.budgetIncludedPct || 0);
                 const excludedPct = Number(group.budgetExcludedPct || 0);
-                html += `
-                    <div class="weekly-history-rollup-row">
+                html += `<div class="weekly-history-rollup-row">
                         <div class="weekly-history-week">${escapeHtml(group.weekKey)}</div>
                         <div class="weekly-history-bars">
-                            <div class="weekly-history-cap-bar">
-                                <div style="width:${pct}%; height:100%; background:${barColor};"></div>
+                            <div class="weekly-history-created-bar">
+                                <div class="weekly-history-created-segment" title="Spend on VROs created in ${escapeHtml(group.weekKey)}: ${formatWeeklyHistoryMoney(currentSpend)}" style="width:${currentPctCap}%; background:#2563eb;"></div>
+                                <div class="weekly-history-created-segment" title="Spend on VROs created before ${escapeHtml(group.weekKey)}: ${formatWeeklyHistoryMoney(priorSpend)}" style="width:${priorPctCap}%; background:#dc2626;"></div>
+                                <div class="weekly-history-created-segment" title="Spend with unknown created week: ${formatWeeklyHistoryMoney(unknownSpend)}" style="width:${unknownPctCap}%; background:#94a3b8;"></div>
+                                <div class="weekly-history-created-segment" title="Remaining cap" style="width:${remainingPct}%; background:#7dd3fc;"></div>
                             </div>
                             <div class="weekly-history-budget-bar">
-                                <div title="Budget Included" style="width:${Math.max(0, Math.min(100, includedPct))}%; background:#2563eb;"></div>
+                                <div title="Budget Included" style="width:${Math.max(0, Math.min(100, includedPct))}%; background:#16a34a;"></div>
                                 <div title="Budget Excluded" style="width:${Math.max(0, Math.min(100, excludedPct))}%; background:#7c3aed;"></div>
                             </div>
                         </div>
                         <div class="weekly-history-amount" style="color:${amountColor};">${formatWeeklyHistoryMoney(weekSpend)}${capLabel}</div>
                         <div class="weekly-history-vros">${group.vroCount} VROs</div>
-                        <div class="weekly-history-split"><span>${includedPct.toFixed(1)}% Included / ${excludedPct.toFixed(1)}% Excluded</span>${lockLabel}</div>
+                        <div class="weekly-history-split"><span>${group.createdThisWeekCount} created this week / ${group.createdPriorWeeksCount} prior weeks</span>${lockLabel}</div>
                     </div>`;
             });
             html += `</div>`;
-
             html += `<div class="weekly-history-table-wrap"><table class="weekly-history-table"><thead><tr>
-                <th class="col-expand">Expand</th>
-                <th class="col-week">Week</th>
-                <th class="col-weekend">Week End</th>
-                <th class="col-spend">EOW / Captured Spend</th>
-                <th class="col-vros">VROs</th>
-                <th class="col-budget">Budget Included</th>
-                <th class="col-budget">Budget Excluded</th>
-                <th class="col-split">Budget Split</th>
+                <th class="col-expand">Expand</th><th class="col-week">Week</th><th class="col-weekend">Week End</th><th class="col-spend">EOW / Captured Spend</th><th class="col-vros">VROs</th><th class="col-vros">Created This Week</th><th class="col-vros">Created Prior Weeks</th><th class="col-budget">Budget Included</th><th class="col-budget">Budget Excluded</th><th class="col-split">Budget Split</th>
             </tr></thead><tbody>`;
-
             groups.forEach(group => {
                 const isOpen = !!expandedWeeklySpendWeeks[group.weekKey];
                 const splitText = `${Number(group.budgetIncludedPct || 0).toFixed(1)}% Included / ${Number(group.budgetExcludedPct || 0).toFixed(1)}% Excluded`;
                 const statusText = group.allocationLocked ? 'EOW Locked' : 'Live';
-                html += `<tr>
-                    <td><button class="filter-btn weekly-history-expand-btn" onclick="toggleWeeklySpendWeek('${escapeHtml(group.weekKey)}')">${isOpen ? '−' : '+'}</button></td>
-                    <td style="font-weight:900;">${escapeHtml(group.weekKey)}</td>
-                    <td class="weekly-history-muted">${escapeHtml(group.weekEndDate || '')}</td>
-                    <td class="weekly-history-money" style="color:${Number(group.totalSpend || 0) >= WEEKLY_WIP_AUTH_CAP ? '#dc2626' : '#16a34a'};">${formatWeeklyHistoryMoney(group.totalSpend || 0)}</td>
-                    <td style="font-weight:900;">${group.vroCount}</td>
-                    <td class="weekly-history-money" style="color:#2563eb;">${formatWeeklyHistoryMoney(group.budgetIncludedSpend || 0)}</td>
-                    <td class="weekly-history-money" style="color:#7c3aed;">${formatWeeklyHistoryMoney(group.budgetExcludedSpend || 0)}</td>
-                    <td><div class="weekly-history-split-cell"><span class="weekly-history-split-text">${escapeHtml(splitText)}</span><span class="weekly-history-status-pill ${group.allocationLocked ? 'locked' : 'live'}">${escapeHtml(statusText.toUpperCase())}</span></div></td>
-                </tr>`;
-
+                html += `<tr><td><button class="filter-btn weekly-history-expand-btn" onclick="toggleWeeklySpendWeek('${escapeHtml(group.weekKey)}')">${isOpen ? '−' : '+'}</button></td><td style="font-weight:900;">${escapeHtml(group.weekKey)}</td><td class="weekly-history-muted">${escapeHtml(group.weekEndDate || '')}</td><td class="weekly-history-money" style="color:${Number(group.totalSpend || 0) >= WEEKLY_WIP_AUTH_CAP ? '#dc2626' : '#16a34a'};">${formatWeeklyHistoryMoney(group.totalSpend || 0)}</td><td style="font-weight:900;">${group.vroCount}</td><td style="font-weight:900; color:#2563eb;">${group.createdThisWeekCount}</td><td style="font-weight:900; color:#dc2626;">${group.createdPriorWeeksCount}</td><td class="weekly-history-money" style="color:#16a34a;">${formatWeeklyHistoryMoney(group.budgetIncludedSpend || 0)}</td><td class="weekly-history-money" style="color:#7c3aed;">${formatWeeklyHistoryMoney(group.budgetExcludedSpend || 0)}</td><td><div class="weekly-history-split-cell"><span class="weekly-history-split-text">${escapeHtml(splitText)}</span><span class="weekly-history-status-pill ${group.allocationLocked ? 'locked' : 'live'}">${escapeHtml(statusText.toUpperCase())}</span></div></td></tr>`;
                 if (isOpen) {
-                    html += `<tr><td colspan="8" class="weekly-history-detail-cell"><div class="weekly-history-detail-panel"><table class="weekly-history-detail-table"><thead><tr>
-                        <th style="width:118px;">Captured At</th>
-                        <th style="width:105px;">AFS RO #</th>
-                        <th style="width:78px;">Unit No</th>
-                        <th style="width:142px;">Branch / Site</th>
-                        <th style="width:112px;">Owner</th>
-                        <th style="width:98px;">Capture Type</th>
-                        <th style="width:82px;">RO Type</th>
-                        <th style="width:118px;">Current Repair Class</th>
-                        <th style="width:118px;">Transfer Repair Class</th>
-                        <th style="width:88px;">Budget Bucket</th>
-                        <th style="width:106px;">Previous Status</th>
-                        <th style="width:106px;">Current Status</th>
-                        <th style="width:92px;">Spend</th>
-                        <th style="width:102px;">Included</th>
-                        <th style="width:102px;">Excluded</th>
-                    </tr></thead><tbody>`;
+                    html += `<tr><td colspan="10" class="weekly-history-detail-cell"><div class="weekly-history-detail-panel"><table class="weekly-history-detail-table"><thead><tr><th style="width:118px;">Captured At</th><th style="width:105px;">AFS RO #</th><th style="width:78px;">Unit No</th><th style="width:142px;">Branch / Site</th><th style="width:112px;">Owner</th><th style="width:98px;">Capture Type</th><th style="width:82px;">RO Type</th><th style="width:92px;">Created Week</th><th style="width:118px;">Created Timing</th><th style="width:118px;">Current Repair Class</th><th style="width:118px;">Transfer Repair Class</th><th style="width:88px;">Budget Bucket</th><th style="width:106px;">Previous Status</th><th style="width:106px;">Current Status</th><th style="width:92px;">Spend</th><th style="width:102px;">Included</th><th style="width:102px;">Excluded</th></tr></thead><tbody>`;
                     group.rows.forEach(row => {
                         const roLink = row.roUrl ? `<a class="ro-link" href="${escapeHtml(row.roUrl)}" target="_blank">${escapeHtml(row.roNumber)}</a>` : escapeHtml(row.roNumber || '');
                         const isExcludedBucket = row.budgetBucket === 'Budget Excluded';
                         const bucketShort = isExcludedBucket ? 'EXCLUDED' : 'INCLUDED';
                         const lockTitle = row.budgetSnapshotLocked ? `EOW locked ${row.budgetSnapshotWeekEnd || ''}` : 'Live allocation';
-                        html += `<tr title="${escapeHtml((row.budgetAllocationBasis || '') + (row.aiRepairClassReasons ? ' · ' + row.aiRepairClassReasons : '')).replace(/"/g, '&quot;')}">
-                            <td>${escapeHtml(row.capturedAt ? new Date(row.capturedAt).toLocaleString() : '')}</td>
-                            <td>${roLink}</td>
-                            <td>${escapeHtml(row.unitNo || '')}</td>
-                            <td>${escapeHtml(row.branch || '')}</td>
-                            <td>${escapeHtml(row.owner || '')}</td>
-                            <td>${escapeHtml(row.captureType || '')}</td>
-                            <td>${escapeHtml(row.roWorkType || '')}</td>
-                            <td>${escapeHtml(row.currentRepairClass || 'Not Available')}</td>
-                            <td>${escapeHtml(row.transferRepairClass || 'No Transfer')}</td>
-                            <td><span class="weekly-budget-pill ${isExcludedBucket ? 'excluded' : 'included'}" title="${escapeHtml(lockTitle)}">${bucketShort}</span></td>
-                            <td>${escapeHtml(row.previousStatus || '')}</td>
-                            <td>${escapeHtml(row.currentStatus || '')}</td>
-                            <td class="weekly-history-money">${formatWeeklyHistoryMoney(row.spend || 0)}</td>
-                            <td class="weekly-history-money" style="color:#2563eb;">${formatWeeklyHistoryMoney(row.budgetIncludedSpend || 0)}</td>
-                            <td class="weekly-history-money" style="color:#7c3aed;">${formatWeeklyHistoryMoney(row.budgetExcludedSpend || 0)}</td>
-                        </tr>`;
+                        html += `<tr title="${escapeHtml((row.budgetAllocationBasis || '') + (row.aiRepairClassReasons ? ' · ' + row.aiRepairClassReasons : '')).replace(/"/g, '&quot;')}"><td>${escapeHtml(row.capturedAt ? new Date(row.capturedAt).toLocaleString() : '')}</td><td>${roLink}</td><td>${escapeHtml(row.unitNo || '')}</td><td>${escapeHtml(row.branch || '')}</td><td>${escapeHtml(row.owner || '')}</td><td>${escapeHtml(row.captureType || '')}</td><td>${escapeHtml(row.roWorkType || '')}</td><td>${escapeHtml(row.createdWeekKey || '')}</td><td>${escapeHtml(row.createdTiming || '')}</td><td>${escapeHtml(row.currentRepairClass || 'Not Available')}</td><td>${escapeHtml(row.transferRepairClass || 'No Transfer')}</td><td><span class="weekly-budget-pill ${isExcludedBucket ? 'excluded' : 'included'}" title="${escapeHtml(lockTitle)}">${bucketShort}</span></td><td>${escapeHtml(row.previousStatus || '')}</td><td>${escapeHtml(row.currentStatus || '')}</td><td class="weekly-history-money">${formatWeeklyHistoryMoney(row.spend || 0)}</td><td class="weekly-history-money" style="color:#16a34a;">${formatWeeklyHistoryMoney(row.budgetIncludedSpend || 0)}</td><td class="weekly-history-money" style="color:#7c3aed;">${formatWeeklyHistoryMoney(row.budgetExcludedSpend || 0)}</td></tr>`;
                     });
                     html += `</tbody></table></div></td></tr>`;
                 }
             });
-
             html += `</tbody></table></div></div>`;
             container.innerHTML = html;
-        }
-
-        function createWeeklyRepairClassBucket() {
-            return {
-                byClass: {},
-                inBudgetTotal: 0,
-                outBudgetTotal: 0,
-                grandTotal: 0,
-                inBudgetVroSet: new Set(),
-                outBudgetVroSet: new Set(),
-                grandVroSet: new Set()
-            };
-        }
-
-        function addWeeklyRepairClassAmount(model, repairClass, row, spend) {
-            const amount = Number(spend || 0);
-            const cls = String(repairClass || 'Not Available').trim() || 'Not Available';
-            const budgetIncluded = isBudgetIncludedRepairClass(cls);
-            const budgetKey = budgetIncluded ? 'In-Budget' : 'Out-of-Budget';
-            const roKey = String((row && (row.roNumber || row.safeRo)) || '').trim();
-            if (!model.byClass[cls]) {
-                model.byClass[cls] = {
-                    repairClass: cls,
-                    budgetBucket: budgetKey,
-                    spend: 0,
-                    vroSet: new Set()
-                };
-            }
-            model.byClass[cls].spend += amount;
-            if (roKey) model.byClass[cls].vroSet.add(roKey);
-            if (budgetIncluded) {
-                model.inBudgetTotal += amount;
-                if (roKey) model.inBudgetVroSet.add(roKey);
-            } else {
-                model.outBudgetTotal += amount;
-                if (roKey) model.outBudgetVroSet.add(roKey);
-            }
-            model.grandTotal += amount;
-            if (roKey) model.grandVroSet.add(roKey);
-        }
-
-        function finalizeWeeklyRepairClassBucket(model) {
-            const repairClasses = Object.values(model.byClass || {}).map(item => ({
-                repairClass: item.repairClass,
-                budgetBucket: item.budgetBucket,
-                spend: Number(item.spend || 0),
-                vroCount: item.vroSet ? item.vroSet.size : 0
-            })).sort((a, b) => {
-                const bucketOrder = (a.budgetBucket === 'In-Budget' ? 0 : 1) - (b.budgetBucket === 'In-Budget' ? 0 : 1);
-                if (bucketOrder !== 0) return bucketOrder;
-                if (Number(b.spend || 0) !== Number(a.spend || 0)) return Number(b.spend || 0) - Number(a.spend || 0);
-                return String(a.repairClass || '').localeCompare(String(b.repairClass || ''));
-            });
-            return {
-                repairClasses,
-                inBudgetTotal: Number(model.inBudgetTotal || 0),
-                outBudgetTotal: Number(model.outBudgetTotal || 0),
-                grandTotal: Number(model.grandTotal || 0),
-                inBudgetVroCount: model.inBudgetVroSet ? model.inBudgetVroSet.size : 0,
-                outBudgetVroCount: model.outBudgetVroSet ? model.outBudgetVroSet.size : 0,
-                grandVroCount: model.grandVroSet ? model.grandVroSet.size : 0
-            };
-        }
-
-        function buildWeeklySpendTableSummaryGroups(rows, spendChannel = 'Vended') {
-            const map = {};
-            (rows || []).forEach(row => {
-                if (getWeeklySpendChannel(row) !== spendChannel) return;
-                const week = row.weekKey || 'UNKNOWN';
-                if (!map[week]) {
-                    map[week] = {
-                        weekKey: week,
-                        weekEndDate: getWeekEndLabel(week),
-                        vroSet: new Set(),
-                        original: createWeeklyRepairClassBucket(),
-                        transfer: createWeeklyRepairClassBucket()
-                    };
-                }
-                const group = map[week];
-                const roKey = row.roNumber || row.safeRo || '';
-                if (roKey) group.vroSet.add(roKey);
-                const spend = Number(row.spend || 0);
-                addWeeklyRepairClassAmount(group.original, row.currentRepairClass || 'Not Available', row, spend);
-                addWeeklyRepairClassAmount(group.transfer, getWeeklyTransferAllocationClass(row.currentRepairClass || 'Not Available', row.transferRepairClass || 'No Transfer'), row, spend);
-            });
-            return Object.values(map).map(group => {
-                group.original = finalizeWeeklyRepairClassBucket(group.original);
-                group.transfer = finalizeWeeklyRepairClassBucket(group.transfer);
-                group.vroCount = Math.max(group.original.grandVroCount || 0, group.transfer.grandVroCount || 0, group.vroSet ? group.vroSet.size : 0);
-                delete group.vroSet;
-                return group;
-            }).sort((a, b) => getWeekSortValue(b.weekKey) - getWeekSortValue(a.weekKey));
-        }
-
-        function formatWeeklySpendPercent(part, total) {
-            const denominator = Number(total || 0);
-            if (!denominator) return '0.0%';
-            return `${((Number(part || 0) / denominator) * 100).toFixed(1)}%`;
-        }
-
-        function renderWeeklyRepairClassRows(model, bucketName) {
-            const rows = (model.repairClasses || []).filter(item => item.budgetBucket === bucketName);
-            const isInBudget = bucketName === 'In-Budget';
-            const subtotal = isInBudget ? model.inBudgetTotal : model.outBudgetTotal;
-            const subtotalVros = isInBudget ? model.inBudgetVroCount : model.outBudgetVroCount;
-            const pillClass = isInBudget ? 'in' : 'out';
-            const label = isInBudget ? 'IN-BUDGET' : 'OUT-OF-BUDGET';
-            if (rows.length === 0) {
-                return `<tr class="weekly-pivot-empty"><td><span class="weekly-rc-pill ${pillClass}">${label}</span></td><td class="weekly-rc-name">No repair classes</td><td class="weekly-pivot-money">${formatWeeklyHistoryMoney(0)}</td><td>0</td><td>0.0%</td></tr>`;
-            }
-            const detailRows = rows.map((item, idx) => `<tr class="${isInBudget ? 'weekly-pivot-row-in' : 'weekly-pivot-row-out'}">
-                    <td>${idx === 0 ? `<span class="weekly-rc-pill ${pillClass}">${label}</span>` : ''}</td>
-                    <td class="weekly-rc-name">${escapeHtml(item.repairClass || 'Not Available')}</td>
-                    <td class="weekly-pivot-money">${formatWeeklyHistoryMoney(item.spend || 0)}</td>
-                    <td>${item.vroCount || 0}</td>
-                    <td>${formatWeeklySpendPercent(item.spend || 0, model.grandTotal || 0)}</td>
-                </tr>`).join('');
-            return detailRows + `<tr class="weekly-pivot-subtotal">
-                <td></td>
-                <td class="weekly-rc-name">${escapeHtml(bucketName)} Total</td>
-                <td class="weekly-pivot-money">${formatWeeklyHistoryMoney(subtotal || 0)}</td>
-                <td>${subtotalVros || 0}</td>
-                <td>${formatWeeklySpendPercent(subtotal || 0, model.grandTotal || 0)}</td>
-            </tr>`;
-        }
-
-        function renderWeeklySpendPivotTable(title, subtitle, model, spendLabel = 'Vended Spend') {
-            return `<div class="weekly-pivot-box">
-                <div class="weekly-pivot-title">${escapeHtml(title)}</div>
-                <div class="weekly-pivot-subtitle">${escapeHtml(subtitle)}</div>
-                <table class="weekly-pivot-table">
-                    <thead><tr>
-                        <th class="weekly-rc-col-bucket">Budget</th>
-                        <th class="weekly-rc-col-class">Repair Class</th>
-                        <th class="weekly-rc-col-money">${escapeHtml(spendLabel)}</th>
-                        <th class="weekly-rc-col-count">VROs</th>
-                        <th class="weekly-rc-col-pct">Split</th>
-                    </tr></thead>
-                    <tbody>
-                        ${renderWeeklyRepairClassRows(model, 'In-Budget')}
-                        ${renderWeeklyRepairClassRows(model, 'Out-of-Budget')}
-                        <tr class="weekly-pivot-grand">
-                            <td></td>
-                            <td class="weekly-rc-name">Grand Total</td>
-                            <td class="weekly-pivot-money">${formatWeeklyHistoryMoney(model.grandTotal || 0)}</td>
-                            <td>${model.grandVroCount || 0}</td>
-                            <td>100.0%</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>`;
         }
 
         function renderWeeklySpendTableSummary() {
@@ -4072,6 +3953,12 @@
                 'Week End': g.weekEndDate || '',
                 'EOW / Captured Spend': Number(g.totalSpend || 0),
                 'VRO Count': g.vroCount,
+                'Created This Week VROs': Number(g.createdThisWeekCount || 0),
+                'Created Prior Weeks VROs': Number(g.createdPriorWeeksCount || 0),
+                'Unknown Created Week VROs': Number(g.createdUnknownWeekCount || 0),
+                'Spend Created This Week': Number(g.createdThisWeekSpend || 0),
+                'Spend Created Prior Weeks': Number(g.createdPriorWeeksSpend || 0),
+                'Spend Unknown Created Week': Number(g.createdUnknownWeekSpend || 0),
                 'Budget Included Spend': Number(g.budgetIncludedSpend || 0),
                 'Budget Included %': Number(g.budgetIncludedPct || 0) / 100,
                 'Budget Excluded Spend': Number(g.budgetExcludedSpend || 0),
@@ -4082,6 +3969,8 @@
                 'Week': r.weekKey,
                 'Week End': getWeekEndLabel(r.weekKey),
                 'Captured At': r.capturedAt || '',
+                'Created Week': r.createdWeekKey || getWeeklyHistoryCreatedWeekKey(r),
+                'Created Timing': r.createdTiming || getWeeklyHistoryCreatedTiming(r),
                 'AFS RO #': r.roNumber || '',
                 'Unit No': r.unitNo || '',
                 'Branch / Site': r.branch || '',
@@ -4106,30 +3995,25 @@
                 'Spend Source': r.spendSource || '',
                 'AI Repair Class Reasons': r.aiRepairClassReasons || ''
             }));
-
             const wb = XLSX.utils.book_new();
             const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
             autoFitColumns(wsSummary, summaryRows);
             styleExcelHeaders(wsSummary);
             XLSX.utils.book_append_sheet(wb, wsSummary, 'Weekly Summary');
-
             const wsDetail = XLSX.utils.json_to_sheet(detailRows);
             autoFitColumns(wsDetail, detailRows);
             styleExcelHeaders(wsDetail);
             XLSX.utils.book_append_sheet(wb, wsDetail, 'Weekly VRO Detail');
-
             const tableSummaryRows = buildWeeklySpendTableSummaryExportRows(rows, 'Vended');
             const wsTableSummary = XLSX.utils.json_to_sheet(tableSummaryRows);
             autoFitColumns(wsTableSummary, tableSummaryRows);
             styleExcelHeaders(wsTableSummary);
             XLSX.utils.book_append_sheet(wb, wsTableSummary, 'Weekly Table Summary');
-
             const dedicatedTableSummaryRows = buildWeeklySpendTableSummaryExportRows(rows, 'Dedicated');
             const wsDedicatedTableSummary = XLSX.utils.json_to_sheet(dedicatedTableSummaryRows);
             autoFitColumns(wsDedicatedTableSummary, dedicatedTableSummaryRows);
             styleExcelHeaders(wsDedicatedTableSummary);
             XLSX.utils.book_append_sheet(wb, wsDedicatedTableSummary, 'Weekly Dedicated Summary');
-
             XLSX.writeFile(wb, `weekly_spend_history_${getLocalDateKey(new Date())}.xlsx`);
         }
 
